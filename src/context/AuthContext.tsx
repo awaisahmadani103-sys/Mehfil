@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User } from '../types';
-import { INITIAL_USERS } from '../data/mockData';
+import { User, AdminActivityLog } from '../types';
+import { DEFAULT_ADMIN_EMAIL } from '../data/mockData';
 import { auth, googleProvider, isFirebaseConfigured } from '../firebase/config';
-import { signInWithPopup } from 'firebase/auth';
+import { signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
+import { safeSetItem, safeGetItem, safeRemoveItem, idbGet } from '../utils/storage';
 
 export interface PendingSignup {
   fullName: string;
@@ -17,8 +18,10 @@ interface AuthContextType {
   currentUser: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isAdmin: boolean;
   needsProfileSetup: boolean;
   users: User[];
+  adminLogs: AdminActivityLog[];
   pendingSignup: PendingSignup | null;
   resendTimer: number;
   signupStep: 'form' | 'verify';
@@ -47,41 +50,72 @@ interface AuthContextType {
   unblockUser: (userId: string) => void;
   logout: () => void;
   deleteAccount: () => void;
-  switchUserDemo: (userId: string) => void;
+  // Admin methods
+  banUser: (userId: string, reason: string, duration: string) => void;
+  unbanUser: (userId: string) => void;
+  deleteUserAdmin: (userId: string) => void;
+  makeAdmin: (userId: string) => void;
+  removeAdmin: (userId: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Legacy fake account IDs to scrub immediately
+const MOCK_IDS = ['user_current', 'user_zoya', 'user_hamza', 'user_daniyal', 'user_sarah', 'sarah_malik'];
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Initialize and scrub users list
   const [users, setUsers] = useState<User[]>(() => {
     try {
-      const saved = localStorage.getItem('mehfil_users');
-      return saved ? JSON.parse(saved) : INITIAL_USERS;
+      const saved = safeGetItem('mehfil_users');
+      if (saved) {
+        const parsed: User[] = JSON.parse(saved);
+        // Scrub out mock accounts
+        const cleaned = parsed.filter(u => !MOCK_IDS.includes(u.id));
+        return cleaned;
+      }
+      return [];
     } catch {
-      return INITIAL_USERS;
+      return [];
     }
   });
 
+  // Current logged in user (strictly null if not explicitly logged in)
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
-      const saved = localStorage.getItem('mehfil_current_user');
-      if (saved) return JSON.parse(saved);
-      // Default to demo user for instant live preview, or null if logged out
-      const defaultUser = INITIAL_USERS.find(u => u.id === 'user_current') || INITIAL_USERS[0];
-      return defaultUser;
+      const saved = safeGetItem('mehfil_current_user');
+      if (saved) {
+        const parsed: User = JSON.parse(saved);
+        if (MOCK_IDS.includes(parsed.id)) {
+          safeRemoveItem('mehfil_current_user');
+          return null;
+        }
+        return parsed;
+      }
+      return null;
     } catch {
       return null;
     }
   });
 
   const [needsProfileSetup, setNeedsProfileSetup] = useState<boolean>(() => {
-    return localStorage.getItem('mehfil_needs_profile_setup') === 'true';
+    return safeGetItem('mehfil_needs_profile_setup') === 'true';
   });
 
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [adminLogs, setAdminLogs] = useState<AdminActivityLog[]>(() => {
+    try {
+      const saved = safeGetItem('mehfil_admin_logs');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
   const [pendingSignup, setPendingSignup] = useState<PendingSignup | null>(() => {
     try {
-      const saved = localStorage.getItem('mehfil_pending_signup');
+      const saved = safeGetItem('mehfil_pending_signup');
       return saved ? JSON.parse(saved) : null;
     } catch {
       return null;
@@ -92,23 +126,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [resendTimer, setResendTimer] = useState<number>(60);
   const [resetPendingEmail, setResetPendingEmail] = useState<{ email: string; code: string } | null>(null);
 
+  // Initial Auth verification and Firebase onAuthStateChanged listener
+  useEffect(() => {
+    let unsubscribe = () => {};
+
+    if (isFirebaseConfigured()) {
+      try {
+        unsubscribe = onAuthStateChanged(auth, (fbUser) => {
+          if (fbUser) {
+            setUsers(prev => {
+              const existing = prev.find(u => u.email.toLowerCase() === fbUser.email?.toLowerCase());
+              if (existing) {
+                // Ensure admin role if matching admin email
+                const updated = fbUser.email?.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase()
+                  ? { ...existing, role: 'admin' as const }
+                  : existing;
+                setCurrentUser(updated);
+                return prev.map(u => u.id === existing.id ? updated : u);
+              }
+              return prev;
+            });
+          }
+          setIsLoading(false);
+        });
+      } catch {
+        setIsLoading(false);
+      }
+    } else {
+      // Local session check
+      const timer = setTimeout(() => {
+        setIsLoading(false);
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+
+    return () => unsubscribe();
+  }, []);
+
   // Sync users to storage
   useEffect(() => {
-    localStorage.setItem('mehfil_users', JSON.stringify(users));
+    safeSetItem('mehfil_users', JSON.stringify(users));
   }, [users]);
 
   // Sync current user to storage
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem('mehfil_current_user', JSON.stringify(currentUser));
+      safeSetItem('mehfil_current_user', JSON.stringify(currentUser));
     } else {
-      localStorage.removeItem('mehfil_current_user');
+      safeRemoveItem('mehfil_current_user');
     }
   }, [currentUser]);
 
+  // Sync admin logs
+  useEffect(() => {
+    safeSetItem('mehfil_admin_logs', JSON.stringify(adminLogs));
+  }, [adminLogs]);
+
   // Sync needsProfileSetup
   useEffect(() => {
-    localStorage.setItem('mehfil_needs_profile_setup', needsProfileSetup ? 'true' : 'false');
+    safeSetItem('mehfil_needs_profile_setup', needsProfileSetup ? 'true' : 'false');
   }, [needsProfileSetup]);
 
   // Resend countdown timer
@@ -121,6 +197,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     return () => clearInterval(interval);
   }, [signupStep, resendTimer]);
+
+  // Determine if active user is Admin
+  const isAdmin = Boolean(
+    currentUser &&
+    (currentUser.email.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase() || currentUser.role === 'admin')
+  );
 
   const checkUsernameUnique = (username: string): boolean => {
     const clean = username.trim().toLowerCase().replace(/^@/, '');
@@ -146,13 +228,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       fullName: fullName.trim(),
       username: cleanUsername,
       email: cleanEmail,
-      passwordHash: btoa(password), // simple obfuscation for local storage simulation
+      passwordHash: btoa(password),
       code,
       codeExpiresAt: Date.now() + 15 * 60 * 1000,
     };
 
     setPendingSignup(pending);
-    localStorage.setItem('mehfil_pending_signup', JSON.stringify(pending));
+    safeSetItem('mehfil_pending_signup', JSON.stringify(pending));
     setSignupStep('verify');
     setResendTimer(60);
 
@@ -168,7 +250,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, error: 'Invalid verification code. Please check and try again.' };
     }
 
-    // Create the user
+    const isSeedAdmin = pendingSignup.email.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase();
+
+    // Create the real user
     const newUser: User = {
       id: `user_${Date.now()}`,
       name: pendingSignup.fullName,
@@ -181,7 +265,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       followersCount: 0,
       followingCount: 0,
       postsCount: 0,
-      isVerified: false,
+      isVerified: isSeedAdmin,
+      role: isSeedAdmin ? 'admin' : 'user',
+      status: 'active',
       createdAt: new Date().toISOString(),
       blockedUsers: [],
       savedPosts: [],
@@ -194,7 +280,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentUser(newUser);
     setNeedsProfileSetup(true);
     setPendingSignup(null);
-    localStorage.removeItem('mehfil_pending_signup');
+    safeRemoveItem('mehfil_pending_signup');
     setSignupStep('form');
 
     return { success: true };
@@ -209,7 +295,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       codeExpiresAt: Date.now() + 15 * 60 * 1000,
     };
     setPendingSignup(updated);
-    localStorage.setItem('mehfil_pending_signup', JSON.stringify(updated));
+    safeSetItem('mehfil_pending_signup', JSON.stringify(updated));
     setResendTimer(60);
     return newCode;
   };
@@ -227,8 +313,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, error: 'No account found with this email or username.' };
     }
 
-    // Valid user found
-    setCurrentUser(found);
+    // Check if user is banned
+    if (found.status === 'banned') {
+      setCurrentUser(found);
+      setIsLoading(false);
+      return { success: true };
+    }
+
+    // Ensure seed admin role
+    const updatedUser = found.email.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase()
+      ? { ...found, role: 'admin' as const }
+      : found;
+
+    setCurrentUser(updatedUser);
     setIsLoading(false);
     return { success: true };
   };
@@ -236,7 +333,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithGoogle = async () => {
     setIsLoading(true);
 
-    // If live Firebase configured, attempt popup
     if (isFirebaseConfigured()) {
       try {
         const result = await signInWithPopup(auth, googleProvider);
@@ -244,20 +340,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const existing = users.find(u => u.email.toLowerCase() === fbUser.email?.toLowerCase());
 
         if (existing) {
-          setCurrentUser(existing);
+          const isSeedAdmin = fbUser.email?.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase();
+          const updated = isSeedAdmin ? { ...existing, role: 'admin' as const } : existing;
+          setCurrentUser(updated);
           setIsLoading(false);
           return { success: true, isNewUser: false };
         } else {
-          // New Google User
-          const generatedUsername = (fbUser.displayName || 'user')
+          const cleanUsername = (fbUser.displayName || 'user')
             .toLowerCase()
             .replace(/\s+/g, '')
             .replace(/[^a-z0-9_]/g, '') + Math.floor(100 + Math.random() * 900);
 
+          const isSeedAdmin = (fbUser.email || '').toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase();
+
           const newUser: User = {
             id: fbUser.uid,
             name: fbUser.displayName || 'Mehfil User',
-            username: generatedUsername,
+            username: cleanUsername,
             email: fbUser.email || '',
             avatarUrl: fbUser.photoURL || `https://api.dicebear.com/7.x/micah/svg?seed=${fbUser.uid}&backgroundColor=111111`,
             bio: '',
@@ -266,7 +365,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             followersCount: 0,
             followingCount: 0,
             postsCount: 0,
-            isVerified: false,
+            isVerified: isSeedAdmin,
+            role: isSeedAdmin ? 'admin' : 'user',
+            status: 'active',
             createdAt: new Date().toISOString(),
             blockedUsers: [],
             savedPosts: [],
@@ -282,33 +383,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return { success: true, isNewUser: true };
         }
       } catch (err: any) {
-        console.warn("Firebase popup not active or cancelled, falling back to simulated Google sign-in:", err);
+        console.warn("Firebase popup unavailable or dismissed, falling back to simulated Google sign-in:", err);
       }
     }
 
-    // Seamless Google Auth Simulator
-    await new Promise(r => setTimeout(r, 600));
-    const mockGoogleEmail = "google.user@gmail.com";
-    const existing = users.find(u => u.email.toLowerCase() === mockGoogleEmail);
+    // Google Sign-in flow when popup is sandboxed
+    await new Promise(r => setTimeout(r, 500));
+    const googleEmail = "user.mehfil@gmail.com";
+    const existing = users.find(u => u.email.toLowerCase() === googleEmail);
 
     if (existing) {
       setCurrentUser(existing);
       setIsLoading(false);
       return { success: true, isNewUser: false };
     } else {
+      const cleanUsername = 'mehfil_user_' + Math.floor(100 + Math.random() * 900);
+      const isSeedAdmin = googleEmail.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase();
+
       const newUser: User = {
         id: `google_${Date.now()}`,
-        name: 'Ayla Noor',
-        username: 'aylanoor_' + Math.floor(100 + Math.random() * 900),
-        email: mockGoogleEmail,
-        avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=500&auto=format&fit=crop&q=80',
-        bio: 'Creativity, film & design 🎨 Connected via Google',
-        link: 'https://mehfil.app',
+        name: 'Mehfil Member',
+        username: cleanUsername,
+        email: googleEmail,
+        avatarUrl: `https://api.dicebear.com/7.x/micah/svg?seed=${cleanUsername}&backgroundColor=111111`,
+        bio: 'Connected via Google on Mehfil',
+        link: '',
         isPrivate: false,
-        followersCount: 15,
-        followingCount: 20,
+        followersCount: 0,
+        followingCount: 0,
         postsCount: 0,
-        isVerified: false,
+        isVerified: isSeedAdmin,
+        role: isSeedAdmin ? 'admin' : 'user',
+        status: 'active',
         createdAt: new Date().toISOString(),
         blockedUsers: [],
         savedPosts: [],
@@ -363,7 +469,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }) => {
     if (!currentUser) return;
     const cleanUsername = data.username.trim().toLowerCase().replace(/^@/, '') || currentUser.username;
-    
+
     const updated: User = {
       ...currentUser,
       avatarUrl: data.avatarUrl || currentUser.avatarUrl,
@@ -425,7 +531,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     setCurrentUser(null);
     setNeedsProfileSetup(false);
-    localStorage.removeItem('mehfil_current_user');
+    safeRemoveItem('mehfil_current_user');
+    if (isFirebaseConfigured()) {
+      try {
+        signOut(auth);
+      } catch {}
+    }
   };
 
   const deleteAccount = () => {
@@ -434,12 +545,122 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logout();
   };
 
-  const switchUserDemo = (userId: string) => {
-    const user = users.find(u => u.id === userId);
-    if (user) {
-      setCurrentUser(user);
-      setNeedsProfileSetup(false);
-    }
+  // ============================================================
+  // ADMIN SYSTEM CAPABILITIES
+  // ============================================================
+  const banUser = (userId: string, reason: string, duration: string) => {
+    if (!isAdmin || !currentUser) return;
+    if (userId === currentUser.id) return; // Cannot ban self
+
+    const targetUser = users.find(u => u.id === userId);
+    if (!targetUser) return;
+    if (targetUser.role === 'admin') return; // Cannot ban fellow admin
+
+    const expiresAt = duration === 'permanent'
+      ? 'permanent'
+      : new Date(Date.now() + parseInt(duration, 10) * 86400000).toISOString();
+
+    updateUserById(userId, {
+      status: 'banned',
+      banReason: reason,
+      banExpiresAt: expiresAt,
+    });
+
+    const newLog: AdminActivityLog = {
+      id: `log_${Date.now()}`,
+      adminId: currentUser.id,
+      adminEmail: currentUser.email,
+      action: 'ban',
+      targetId: userId,
+      targetName: targetUser.name,
+      reason: `${reason} (${duration === 'permanent' ? 'Permanent' : duration + ' days'})`,
+      timestamp: new Date().toISOString(),
+    };
+    setAdminLogs(prev => [newLog, ...prev]);
+  };
+
+  const unbanUser = (userId: string) => {
+    if (!isAdmin || !currentUser) return;
+    const targetUser = users.find(u => u.id === userId);
+    if (!targetUser) return;
+
+    updateUserById(userId, {
+      status: 'active',
+      banReason: undefined,
+      banExpiresAt: undefined,
+    });
+
+    const newLog: AdminActivityLog = {
+      id: `log_${Date.now()}`,
+      adminId: currentUser.id,
+      adminEmail: currentUser.email,
+      action: 'unban',
+      targetId: userId,
+      targetName: targetUser.name,
+      timestamp: new Date().toISOString(),
+    };
+    setAdminLogs(prev => [newLog, ...prev]);
+  };
+
+  const deleteUserAdmin = (userId: string) => {
+    if (!isAdmin || !currentUser) return;
+    if (userId === currentUser.id) return; // Cannot delete self
+
+    const targetUser = users.find(u => u.id === userId);
+    if (!targetUser) return;
+    if (targetUser.role === 'admin') return; // Cannot delete fellow admin
+
+    setUsers(prev => prev.filter(u => u.id !== userId));
+
+    const newLog: AdminActivityLog = {
+      id: `log_${Date.now()}`,
+      adminId: currentUser.id,
+      adminEmail: currentUser.email,
+      action: 'delete_user',
+      targetId: userId,
+      targetName: targetUser.name,
+      timestamp: new Date().toISOString(),
+    };
+    setAdminLogs(prev => [newLog, ...prev]);
+  };
+
+  const makeAdmin = (userId: string) => {
+    if (!isAdmin || !currentUser) return;
+    const targetUser = users.find(u => u.id === userId);
+    if (!targetUser) return;
+
+    updateUserById(userId, { role: 'admin' });
+
+    const newLog: AdminActivityLog = {
+      id: `log_${Date.now()}`,
+      adminId: currentUser.id,
+      adminEmail: currentUser.email,
+      action: 'promote_admin',
+      targetId: userId,
+      targetName: targetUser.name,
+      timestamp: new Date().toISOString(),
+    };
+    setAdminLogs(prev => [newLog, ...prev]);
+  };
+
+  const removeAdmin = (userId: string) => {
+    if (!isAdmin || !currentUser) return;
+    if (userId === currentUser.id) return; // Cannot demote self
+    const targetUser = users.find(u => u.id === userId);
+    if (!targetUser) return;
+
+    updateUserById(userId, { role: 'user' });
+
+    const newLog: AdminActivityLog = {
+      id: `log_${Date.now()}`,
+      adminId: currentUser.id,
+      adminEmail: currentUser.email,
+      action: 'demote_admin',
+      targetId: userId,
+      targetName: targetUser.name,
+      timestamp: new Date().toISOString(),
+    };
+    setAdminLogs(prev => [newLog, ...prev]);
   };
 
   return (
@@ -448,8 +669,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         currentUser,
         isAuthenticated: !!currentUser,
         isLoading,
+        isAdmin,
         needsProfileSetup,
         users,
+        adminLogs,
         pendingSignup,
         resendTimer,
         signupStep,
@@ -470,7 +693,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unblockUser,
         logout,
         deleteAccount,
-        switchUserDemo,
+        banUser,
+        unbanUser,
+        deleteUserAdmin,
+        makeAdmin,
+        removeAdmin,
       }}
     >
       {children}

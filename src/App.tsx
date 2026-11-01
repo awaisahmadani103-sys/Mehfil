@@ -8,6 +8,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider, useData } from './context/DataContext';
 import { AuthFlow } from './screens/AuthFlow';
 import { ProfileSetup } from './screens/ProfileSetup';
+import { BannedScreen } from './screens/BannedScreen';
+import { AdminPanel } from './screens/AdminPanel';
 import { HomeScreen } from './screens/HomeScreen';
 import { SearchScreen } from './screens/SearchScreen';
 import { UploadScreen } from './screens/UploadScreen';
@@ -18,10 +20,19 @@ import { SettingsScreen } from './screens/SettingsScreen';
 import { BottomNav, TabType } from './components/BottomNav';
 import { StoryViewerModal } from './components/StoryViewerModal';
 import { FullPostModal } from './components/FullPostModal';
+import { Logo } from './components/Logo';
+import { Credits } from './components/Credits';
 import { User } from './types';
 
 function MainApp() {
-  const { isAuthenticated, needsProfileSetup, currentUser } = useAuth();
+  const {
+    isAuthenticated,
+    isLoading,
+    needsProfileSetup,
+    currentUser,
+    isAdmin,
+  } = useAuth();
+
   const {
     posts,
     activePostId,
@@ -37,15 +48,58 @@ function MainApp() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
 
-  // STEP 1: If not authenticated, show Welcome & Auth screens
-  if (!isAuthenticated) {
+  // STARTUP FLOW: Loading Screen with Mehfil animated logo
+  if (isLoading) {
+    return (
+      <div className="min-h-screen w-full bg-[#111111] text-white flex flex-col justify-between items-center p-6 select-none relative overflow-hidden">
+        <div className="w-full h-8" />
+        <div className="flex flex-col items-center justify-center space-y-6 text-center my-auto">
+          <Logo variant="full" size="xl" animated={true} />
+          <div className="flex items-center gap-1.5 pt-4">
+            <span className="w-2 h-2 rounded-full bg-[#FACC15] animate-bounce" />
+            <span className="w-2 h-2 rounded-full bg-[#FACC15] animate-bounce [animation-delay:0.2s]" />
+            <span className="w-2 h-2 rounded-full bg-[#FACC15] animate-bounce [animation-delay:0.4s]" />
+          </div>
+        </div>
+        <Credits className="pb-4" />
+      </div>
+    );
+  }
+
+  // LOGIN GATE: If not authenticated, display ONLY the Welcome & Auth screens
+  // Home, Search, Upload, Messages, Profile are strictly unreachable!
+  if (!isAuthenticated || !currentUser) {
     return <AuthFlow initialView="welcome" />;
   }
 
-  // STEP 2: Profile setup screen shown once after signup or new Google user
+  // SUSPENDED / BANNED GATE: If account was banned by administration
+  if (currentUser.status === 'banned') {
+    return (
+      <BannedScreen
+        reason={currentUser.banReason}
+        expiresAt={currentUser.banExpiresAt}
+      />
+    );
+  }
+
+  // PROFILE SETUP GATE: Redirect immediately after signup until profile setup is done
   if (needsProfileSetup) {
     return <ProfileSetup />;
+  }
+
+  // ADMIN PANEL VIEW
+  if (isAdminPanelOpen && isAdmin) {
+    return (
+      <AdminPanel
+        onBack={() => setIsAdminPanelOpen(false)}
+        onSelectUser={userId => {
+          setIsAdminPanelOpen(false);
+          setSelectedUserId(userId);
+        }}
+      />
+    );
   }
 
   // Navigation Handlers
@@ -53,6 +107,7 @@ function MainApp() {
     setSelectedUserId(userId);
     setIsNotificationsOpen(false);
     setIsSettingsOpen(false);
+    setIsAdminPanelOpen(false);
   };
 
   const handleOpenMessagesWithUser = (user: User) => {
@@ -60,6 +115,7 @@ function MainApp() {
     setSelectedUserId(null);
     setIsNotificationsOpen(false);
     setIsSettingsOpen(false);
+    setIsAdminPanelOpen(false);
     setCurrentTab('messages');
   };
 
@@ -68,6 +124,7 @@ function MainApp() {
     setSelectedUserId(null);
     setIsNotificationsOpen(false);
     setIsSettingsOpen(false);
+    setIsAdminPanelOpen(false);
   };
 
   return (
@@ -76,9 +133,19 @@ function MainApp() {
       <div className="flex-1 w-full">
         {/* Full View: Notifications */}
         {isNotificationsOpen ? (
-          <NotificationsScreen
-            onSelectUser={handleSelectUser}
-          />
+          <div className="w-full">
+            <div className="max-w-lg mx-auto pt-2 px-4">
+              <button
+                onClick={() => setIsNotificationsOpen(false)}
+                className="text-xs text-[#FACC15] font-semibold hover:underline flex items-center gap-1 mb-2"
+              >
+                ← Back
+              </button>
+            </div>
+            <NotificationsScreen
+              onSelectUser={handleSelectUser}
+            />
+          </div>
         ) : isSettingsOpen ? (
           /* Full View: Settings */
           <SettingsScreen
@@ -88,6 +155,10 @@ function MainApp() {
               setCurrentTab('profile');
               setSelectedUserId(null);
             }}
+            onOpenAdminPanel={isAdmin ? () => {
+              setIsSettingsOpen(false);
+              setIsAdminPanelOpen(true);
+            } : undefined}
           />
         ) : selectedUserId ? (
           /* Full View: Selected User Profile */
@@ -97,7 +168,7 @@ function MainApp() {
                 onClick={() => setSelectedUserId(null)}
                 className="text-xs text-[#FACC15] font-semibold hover:underline flex items-center gap-1 mb-2"
               >
-                ← Back to previous
+                ← Back
               </button>
             </div>
             <ProfileScreen
@@ -114,6 +185,7 @@ function MainApp() {
                 onSelectUser={handleSelectUser}
                 onOpenNotifications={() => setIsNotificationsOpen(true)}
                 onOpenMessages={() => setCurrentTab('messages')}
+                onOpenUpload={() => setCurrentTab('upload')}
               />
             )}
             {currentTab === 'search' && (
@@ -136,17 +208,17 @@ function MainApp() {
         )}
       </div>
 
-      {/* Persistent Bottom Navigation (Mobile + Desktop friendly) */}
+      {/* Persistent Bottom Navigation */}
       <BottomNav
         currentTab={
-          isNotificationsOpen || isSettingsOpen || selectedUserId
+          isNotificationsOpen || isSettingsOpen || selectedUserId || isAdminPanelOpen
             ? ('' as any)
             : currentTab
         }
         onTabChange={handleTabChange}
       />
 
-      {/* Story Viewer Modal (Instagram style full screen with progress timer) */}
+      {/* Story Viewer Modal */}
       {activeStoryUserStories.length > 0 && activeStoryIndex !== null && (
         <StoryViewerModal
           stories={activeStoryUserStories}
@@ -155,7 +227,7 @@ function MainApp() {
         />
       )}
 
-      {/* Full Post Modal (BUG 1: Route #/post/:postId support, refresh, and full post view) */}
+      {/* Full Post Modal (Route #/post/:postId support, refresh, and full post view) */}
       {activePostId && (
         <FullPostModal
           postId={activePostId}

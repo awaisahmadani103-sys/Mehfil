@@ -3,6 +3,8 @@ import { User, Post } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { FollowListModal } from '../components/FollowListModal';
+import { Credits } from '../components/Credits';
+import { compressImageFile } from '../utils/storage';
 import {
   Grid,
   Video,
@@ -85,16 +87,21 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const userVideos = userPosts.filter(p => p.type === 'video');
   const savedPosts = posts.filter(p => currentUser?.savedPosts?.includes(p.id));
 
-  const handleAvatarFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          setEditAvatar(reader.result);
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImageFile(file, 400, 0.8);
+        setEditAvatar(compressed);
+      } catch {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === 'string') {
+            setEditAvatar(reader.result);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
@@ -374,8 +381,18 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           {activeTab === 'posts' && (
             <div className="grid grid-cols-3 gap-1.5">
               {userPosts.length === 0 ? (
-                <div className="col-span-3 py-12 text-center text-zinc-500 text-xs">
-                  No posts yet.
+                <div className="col-span-3 py-14 text-center bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-6 space-y-2">
+                  <div className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto text-[#FACC15]">
+                    <Grid className="w-5 h-5" />
+                  </div>
+                  <p className="font-bold text-white text-xs">
+                    {isOwner ? 'Share your first post' : 'No posts shared yet'}
+                  </p>
+                  <p className="text-[11px] text-zinc-400">
+                    {isOwner
+                      ? 'Capture photos or short reels and share them with the Mehfil community.'
+                      : 'When they share photos or reels, they will appear here.'}
+                  </p>
                 </div>
               ) : (
                 userPosts.map(post => (
@@ -578,6 +595,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </div>
         </div>
       )}
+
+      {/* Mandatory Credits */}
+      <Credits className="pt-6" />
     </div>
   );
 };

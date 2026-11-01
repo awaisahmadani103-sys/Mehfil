@@ -1,50 +1,56 @@
 import React, { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Logo } from '../components/Logo';
+import { Credits } from '../components/Credits';
 import { Camera, Lock, Globe, Check, Link as LinkIcon, Sparkles } from 'lucide-react';
+import { compressImageFile } from '../utils/storage';
 
-const PRESET_AVATARS = [
-  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=500&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=500&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=500&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=500&auto=format&fit=crop&q=80',
+const DEFAULT_AVATARS = [
+  'https://api.dicebear.com/7.x/identicon/svg?seed=mehfil_1&backgroundColor=111111',
+  'https://api.dicebear.com/7.x/identicon/svg?seed=mehfil_2&backgroundColor=111111',
+  'https://api.dicebear.com/7.x/identicon/svg?seed=mehfil_3&backgroundColor=111111',
+  'https://api.dicebear.com/7.x/identicon/svg?seed=mehfil_4&backgroundColor=111111',
+  'https://api.dicebear.com/7.x/identicon/svg?seed=mehfil_5&backgroundColor=111111',
 ];
 
 export const ProfileSetup: React.FC = () => {
   const { currentUser, completeProfileSetup } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [avatarUrl, setAvatarUrl] = useState<string>(
-    currentUser?.avatarUrl || PRESET_AVATARS[0]
-  );
+  const defaultAvatar =
+    currentUser?.avatarUrl ||
+    `https://api.dicebear.com/7.x/identicon/svg?seed=${currentUser?.username || 'user'}&backgroundColor=111111`;
+
+  const [avatarUrl, setAvatarUrl] = useState<string>(defaultAvatar);
   const [name, setName] = useState<string>(currentUser?.name || '');
   const [username, setUsername] = useState<string>(currentUser?.username || '');
-  const [bio, setBio] = useState<string>(
-    currentUser?.bio || 'Apna andaz, apni mehfil! ✨'
-  );
+  const [bio, setBio] = useState<string>(currentUser?.bio || '');
   const [link, setLink] = useState<string>(currentUser?.link || '');
   const [isPrivate, setIsPrivate] = useState<boolean>(currentUser?.isPrivate || false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          setAvatarUrl(reader.result);
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImageFile(file, 400, 0.8);
+        setAvatarUrl(compressed);
+      } catch {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === 'string') {
+            setAvatarUrl(reader.result);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
   const handleSave = async () => {
     setIsSubmitting(true);
     await completeProfileSetup({
-      avatarUrl,
+      avatarUrl: avatarUrl || defaultAvatar,
       username: username.trim() || (currentUser?.username || 'user'),
       name: name.trim() || (currentUser?.name || 'Mehfil User'),
       bio: bio.slice(0, 150),
@@ -57,7 +63,7 @@ export const ProfileSetup: React.FC = () => {
   const handleSkip = async () => {
     setIsSubmitting(true);
     await completeProfileSetup({
-      avatarUrl: currentUser?.avatarUrl || `https://api.dicebear.com/7.x/micah/svg?seed=${currentUser?.username}&backgroundColor=111111`,
+      avatarUrl: defaultAvatar,
       username: currentUser?.username || 'user',
       name: currentUser?.name || 'Mehfil User',
       bio: '',
@@ -75,7 +81,7 @@ export const ProfileSetup: React.FC = () => {
       <div className="w-full max-w-lg bg-zinc-950/95 border border-zinc-800 rounded-3xl p-6 sm:p-8 backdrop-blur-xl shadow-2xl relative z-10 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
-          <Logo size="sm" />
+          <Logo variant="compact" size="sm" />
           <button
             type="button"
             onClick={handleSkip}
@@ -121,12 +127,12 @@ export const ProfileSetup: React.FC = () => {
             className="hidden"
           />
           <p className="text-[11px] text-zinc-400">
-            Click photo to upload or pick a preset avatar below:
+            Click photo to upload your profile picture or pick an icon:
           </p>
 
-          {/* Preset Avatars Row */}
-          <div className="flex items-center gap-2 pt-1 overflow-x-auto max-w-full pb-1">
-            {PRESET_AVATARS.map((preset, idx) => (
+          {/* Clean avatars row */}
+          <div className="flex items-center gap-2 pt-1">
+            {DEFAULT_AVATARS.map((preset, idx) => (
               <button
                 key={idx}
                 type="button"
@@ -135,7 +141,7 @@ export const ProfileSetup: React.FC = () => {
                   avatarUrl === preset ? 'border-[#FACC15] scale-110' : 'border-zinc-700 opacity-70 hover:opacity-100'
                 }`}
               >
-                <img src={preset} alt={`Preset ${idx}`} className="w-full h-full object-cover" />
+                <img src={preset} alt={`Avatar ${idx}`} className="w-full h-full object-cover bg-zinc-900" />
               </button>
             ))}
           </div>
@@ -269,6 +275,9 @@ export const ProfileSetup: React.FC = () => {
             {isSubmitting ? 'Saving...' : 'Start Exploring'}
           </button>
         </div>
+
+        {/* Credits on Profile Setup */}
+        <Credits />
       </div>
     </div>
   );

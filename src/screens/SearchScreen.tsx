@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
+import { Credits } from '../components/Credits';
 import { TRENDING_TAGS } from '../data/mockData';
-import { Search, Hash, Heart, Play, UserCheck, UserPlus, Lock } from 'lucide-react';
+import { Search, Hash, Heart, Play, UserCheck, UserPlus, Lock, Users, Sparkles } from 'lucide-react';
 
 interface SearchScreenProps {
   onSelectUser: (userId: string) => void;
@@ -17,7 +18,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({ onSelectUser }) => {
 
   const cleanQuery = searchTerm.trim().toLowerCase().replace(/^#|^@/, '');
 
-  // Filter users
+  // Filter users (exclude current user from search suggestions if desirable, or show with "You" badge)
   const filteredUsers = users.filter(u => {
     if (!cleanQuery) return true;
     return (
@@ -53,7 +54,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({ onSelectUser }) => {
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
           placeholder="Search creators, #hashtags, or posts..."
-          className="w-full bg-zinc-900 border border-zinc-800 focus:border-[#FACC15] focus:outline-none text-white text-sm rounded-2xl py-2.5 pl-10 pr-4 placeholder-zinc-500 transition-colors"
+          className="w-full bg-zinc-900 border border-zinc-800 focus:border-[#FACC15] focus:outline-none text-white text-xs rounded-2xl py-2.5 pl-10 pr-4 placeholder-zinc-500 transition-colors"
         />
         {searchTerm && (
           <button
@@ -83,7 +84,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({ onSelectUser }) => {
       </div>
 
       {/* Trending Hashtags row when query is empty or on 'tags' */}
-      {(activeTab === 'all' || activeTab === 'tags') && (
+      {(activeTab === 'all' || activeTab === 'tags') && filteredTags.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-300">
             <Hash className="w-4 h-4 text-[#FACC15]" />
@@ -111,66 +112,76 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({ onSelectUser }) => {
       {(activeTab === 'all' || activeTab === 'accounts') && (
         <div className="space-y-3 pt-1">
           <p className="text-xs font-bold text-zinc-300">
-            {searchTerm ? 'Creators matching search' : 'Suggested Creators'}
+            {searchTerm ? 'Creators matching search' : 'Creators'}
           </p>
           <div className="space-y-2">
-            {filteredUsers.slice(0, activeTab === 'accounts' ? 10 : 4).map(u => {
-              const isFollowing = currentUser?.following?.includes(u.id);
-              const isSelf = currentUser?.id === u.id;
+            {filteredUsers.length === 0 ? (
+              <div className="p-8 text-center bg-zinc-950/60 border border-zinc-800/80 rounded-2xl space-y-1.5 text-zinc-500 text-xs">
+                <Users className="w-8 h-8 mx-auto text-zinc-600" />
+                <p className="text-zinc-300 font-semibold">No users found.</p>
+                <p className="text-[11px] text-zinc-500">
+                  {searchTerm ? `No creators found for "${searchTerm}"` : 'Sign up or invite friends to join Mehfil!'}
+                </p>
+              </div>
+            ) : (
+              filteredUsers.slice(0, activeTab === 'accounts' ? 15 : 6).map(u => {
+                const isFollowing = currentUser?.following?.includes(u.id);
+                const isSelf = currentUser?.id === u.id;
 
-              return (
-                <div
-                  key={u.id}
-                  className="flex items-center justify-between p-2.5 rounded-2xl bg-zinc-950 border border-zinc-800/80 hover:border-zinc-700 transition-colors"
-                >
+                return (
                   <div
-                    onClick={() => onSelectUser(u.id)}
-                    className="flex items-center gap-3 cursor-pointer flex-1 mr-2"
+                    key={u.id}
+                    className="flex items-center justify-between p-2.5 rounded-2xl bg-zinc-950 border border-zinc-800/80 hover:border-zinc-700 transition-colors"
                   >
-                    <img
-                      src={u.avatarUrl}
-                      alt={u.name}
-                      className="w-11 h-11 rounded-full object-cover shrink-0"
-                    />
-                    <div className="text-xs truncate">
-                      <div className="flex items-center gap-1">
-                        <span className="font-bold text-white hover:underline truncate">
-                          {u.name}
-                        </span>
-                        {u.isPrivate && <Lock className="w-3 h-3 text-zinc-400" />}
-                      </div>
-                      <p className="text-zinc-400 text-[11px]">@{u.username}</p>
-                      <p className="text-zinc-500 text-[10px] truncate max-w-[200px] mt-0.5">
-                        {u.bio || 'Mehfil member'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {!isSelf && currentUser && (
-                    <button
-                      onClick={() => (isFollowing ? unfollowUser(u.id) : followUser(u.id))}
-                      className={`text-xs font-semibold px-3 py-1.5 rounded-xl shrink-0 transition-all flex items-center gap-1 ${
-                        isFollowing
-                          ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-                          : 'bg-[#FACC15] hover:bg-yellow-400 text-black'
-                      }`}
+                    <div
+                      onClick={() => onSelectUser(u.id)}
+                      className="flex items-center gap-3 cursor-pointer flex-1 mr-2"
                     >
-                      {isFollowing ? (
-                        <>
-                          <UserCheck className="w-3.5 h-3.5" />
-                          Following
-                        </>
-                      ) : (
-                        <>
-                          <UserPlus className="w-3.5 h-3.5" />
-                          Follow
-                        </>
-                      )}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+                      <img
+                        src={u.avatarUrl}
+                        alt={u.name}
+                        className="w-11 h-11 rounded-full object-cover shrink-0 border border-zinc-800"
+                      />
+                      <div className="text-xs truncate">
+                        <div className="flex items-center gap-1">
+                          <span className="font-bold text-white hover:underline truncate">
+                            {u.name}
+                          </span>
+                          {u.isPrivate && <Lock className="w-3 h-3 text-zinc-400" />}
+                        </div>
+                        <p className="text-zinc-400 text-[11px]">@{u.username}</p>
+                        <p className="text-zinc-500 text-[10px] truncate max-w-[200px] mt-0.5">
+                          {u.bio || 'Mehfil member'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {!isSelf && currentUser && (
+                      <button
+                        onClick={() => (isFollowing ? unfollowUser(u.id) : followUser(u.id))}
+                        className={`text-xs font-semibold px-3 py-1.5 rounded-xl shrink-0 transition-all flex items-center gap-1 ${
+                          isFollowing
+                            ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                            : 'bg-[#FACC15] hover:bg-yellow-400 text-black'
+                        }`}
+                      >
+                        {isFollowing ? (
+                          <>
+                            <UserCheck className="w-3.5 h-3.5" />
+                            Following
+                          </>
+                        ) : (
+                          <>
+                            <UserPlus className="w-3.5 h-3.5" />
+                            Follow
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       )}
@@ -181,38 +192,51 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({ onSelectUser }) => {
           <p className="text-xs font-bold text-zinc-300">
             {searchTerm ? 'Posts matching search' : 'Explore Grid'}
           </p>
-          <div className="grid grid-cols-3 gap-1.5">
-            {filteredPosts.map(post => (
-              <div
-                key={post.id}
-                onClick={() => setActivePostId(post.id, filteredPosts)}
-                className="relative aspect-square rounded-xl overflow-hidden bg-zinc-900 group cursor-pointer hover:border hover:border-[#FACC15]/40 transition-colors"
-              >
-                <img
-                  src={post.thumbnailUrl || post.mediaUrl}
-                  alt={post.caption}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
+          {filteredPosts.length === 0 ? (
+            <div className="p-8 text-center bg-zinc-950/60 border border-zinc-800/80 rounded-2xl space-y-1.5 text-zinc-500 text-xs">
+              <Sparkles className="w-8 h-8 mx-auto text-zinc-600" />
+              <p className="text-zinc-300 font-semibold">No posts yet.</p>
+              <p className="text-[11px] text-zinc-500">
+                {searchTerm ? 'Try searching for another hashtag or keyword.' : 'Check back once creators share posts.'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-1.5">
+              {filteredPosts.map(post => (
+                <div
+                  key={post.id}
+                  onClick={() => setActivePostId(post.id, filteredPosts)}
+                  className="relative aspect-square rounded-xl overflow-hidden bg-zinc-900 group cursor-pointer hover:border hover:border-[#FACC15]/40 transition-colors"
+                >
+                  <img
+                    src={post.thumbnailUrl || post.mediaUrl}
+                    alt={post.caption}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
 
-                {/* Video indicator icon */}
-                {post.type === 'video' && (
-                  <div className="absolute top-1.5 right-1.5 p-1 bg-black/60 rounded-md text-white">
-                    <Play className="w-3 h-3 fill-white" />
-                  </div>
-                )}
+                  {/* Video indicator icon */}
+                  {post.type === 'video' && (
+                    <div className="absolute top-1.5 right-1.5 p-1 bg-black/60 rounded-md text-white">
+                      <Play className="w-3 h-3 fill-white" />
+                    </div>
+                  )}
 
-                {/* Hover overlay with likes count */}
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 text-white text-xs font-bold transition-opacity">
-                  <div className="flex items-center gap-1">
-                    <Heart className="w-3.5 h-3.5 fill-[#EF4444] text-[#EF4444]" />
-                    <span>{post.likesCount}</span>
+                  {/* Hover overlay with likes count */}
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 text-white text-xs font-bold transition-opacity">
+                    <div className="flex items-center gap-1">
+                      <Heart className="w-3.5 h-3.5 fill-[#EF4444] text-[#EF4444]" />
+                      <span>{post.likesCount}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
+
+      {/* Mandatory Credits on Search screen */}
+      <Credits className="pt-4" />
     </div>
   );
 };

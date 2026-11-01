@@ -12,31 +12,12 @@ import {
   X,
   Sparkles,
 } from 'lucide-react';
+import { Credits } from '../components/Credits';
+import { compressImageFile } from '../utils/storage';
 
 interface UploadScreenProps {
   onSuccess: () => void;
 }
-
-const SAMPLE_MEDIA_PRESETS = [
-  {
-    type: 'video' as const,
-    name: 'Neon Lights Reels',
-    url: 'https://assets.mixkit.co/videos/preview/mixkit-girl-in-neon-sign-1232-large.mp4',
-    thumb: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=500&auto=format&fit=crop&q=80',
-  },
-  {
-    type: 'photo' as const,
-    name: 'Chai & Poetry',
-    url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=1000&auto=format&fit=crop&q=80',
-    thumb: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300&auto=format&fit=crop&q=80',
-  },
-  {
-    type: 'photo' as const,
-    name: 'Northern Peaks',
-    url: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1200&auto=format&fit=crop&q=80',
-    thumb: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=300&auto=format&fit=crop&q=80',
-  },
-];
 
 const SUGGESTED_HASHTAGS = [
   '#MehfilMoments',
@@ -61,18 +42,23 @@ export const UploadScreen: React.FC<UploadScreenProps> = ({ onSuccess }) => {
   const [isPosting, setIsPosting] = useState(false);
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const isVid = file.type.startsWith('video');
       setPostType(isVid ? 'video' : 'photo');
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          setMediaUrl(reader.result);
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImageFile(file, 1080, 0.75);
+        setMediaUrl(compressed);
+      } catch {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === 'string') {
+            setMediaUrl(reader.result);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
@@ -197,27 +183,6 @@ export const UploadScreen: React.FC<UploadScreenProps> = ({ onSuccess }) => {
             accept={postType === 'video' ? 'video/*' : 'image/*'}
             className="hidden"
           />
-
-          {/* Quick presets picker */}
-          <div className="pt-1">
-            <span className="text-[11px] text-zinc-400">Or choose high-res preset:</span>
-            <div className="flex gap-2 mt-1.5 overflow-x-auto no-scrollbar">
-              {SAMPLE_MEDIA_PRESETS.map((preset, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => {
-                    setPostType(preset.type);
-                    setMediaUrl(preset.url);
-                  }}
-                  className="flex items-center gap-2 p-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-xs shrink-0 transition-colors"
-                >
-                  <img src={preset.thumb} alt={preset.name} className="w-7 h-7 rounded-lg object-cover" />
-                  <span className="text-zinc-300 pr-1">{preset.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Caption */}
@@ -364,6 +329,8 @@ export const UploadScreen: React.FC<UploadScreenProps> = ({ onSuccess }) => {
           {isPosting ? 'Publishing...' : 'Share to Mehfil'}
         </button>
       </form>
+
+      <Credits className="pt-4" />
     </div>
   );
 };

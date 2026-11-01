@@ -1,22 +1,27 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Post, Comment, Story, Conversation, Message, NotificationItem, User } from '../types';
+import { Post, Comment, Story, Conversation, Message, NotificationItem, User, ReportItem } from '../types';
 import {
   INITIAL_POSTS,
   INITIAL_STORIES,
   INITIAL_NOTIFICATIONS,
+  INITIAL_CONVERSATIONS,
 } from '../data/mockData';
 import { useAuth } from './AuthContext';
+import { safeSetItem, safeGetItem, idbGet } from '../utils/storage';
 
 // Helper to generate consistent sorted chatId: e.g. "uid1_uid2"
 export const getDeterministicChatId = (uid1: string, uid2: string): string => {
   return [uid1, uid2].sort().join('_');
 };
 
+const MOCK_IDS = ['user_current', 'user_zoya', 'user_hamza', 'user_daniyal', 'user_sarah', 'sarah_malik'];
+
 interface DataContextType {
   posts: Post[];
   stories: Story[];
   conversations: Conversation[];
   notifications: NotificationItem[];
+  reports: ReportItem[];
   activeConversation: Conversation | null;
   activePostId: string | null;
   activePostList: Post[];
@@ -25,11 +30,13 @@ interface DataContextType {
   unreadNotificationCount: number;
   unreadMessageCount: number;
   isTypingUserId: string | null;
-  // Post Interactions (BUG 1)
+  // Post Interactions
   setActivePostId: (postId: string | null, list?: Post[]) => void;
   getPostById: (postId: string) => Post | undefined;
   editPost: (postId: string, updates: { caption?: string; visibility?: 'public' | 'followers' | 'private' }) => void;
   deletePost: (postId: string) => void;
+  adminDeletePost: (postId: string) => void;
+  adminDeleteComment: (postId: string, commentId: string) => void;
   toggleLikePost: (postId: string) => void;
   toggleSavePost: (postId: string) => void;
   addComment: (postId: string, text: string, replyToCommentId?: string) => void;
@@ -42,13 +49,13 @@ interface DataContextType {
     visibility: 'public' | 'followers' | 'private';
     musicTitle?: string;
   }) => void;
-  // Follow / Unfollow / Remove Follower (BUG 2)
+  // Follow / Unfollow / Remove Follower
   followUser: (targetUserId: string) => void;
   unfollowUser: (targetUserId: string) => void;
   removeFollower: (userId: string, followerId: string) => void;
   acceptFollowRequest: (notificationId: string, requesterId: string) => void;
   rejectFollowRequest: (notificationId: string, requesterId: string) => void;
-  // Real-time Chat System (BUG 3)
+  // Real-time Chat System
   setActiveConversation: (conv: Conversation | null) => void;
   openOrCreateConversationWithUser: (user: User) => Conversation;
   getMessagesForChat: (chatId: string) => Message[];
@@ -61,21 +68,27 @@ interface DataContextType {
   viewStory: (storyId: string) => void;
   openStoryViewer: (stories: Story[], startIndex?: number) => void;
   closeStoryViewer: () => void;
-  // Notifications & Safety
+  // Notifications & Safety & Reports
   markNotificationsAsRead: () => void;
-  reportContent: (contentId: string, reason: string) => void;
+  reportContent: (contentId: string, reason: string, targetType?: 'post' | 'user') => void;
+  dismissReport: (reportId: string) => void;
+  actionReport: (reportId: string, actionType: 'delete_post' | 'ban_user') => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser, users, updateProfile, updateUserById } = useAuth();
+  const { currentUser, users, updateProfile, updateUserById, banUser } = useAuth();
 
-  // Posts State
+  // Posts State (Scrub mock posts)
   const [posts, setPosts] = useState<Post[]>(() => {
     try {
-      const saved = localStorage.getItem('mehfil_posts');
-      return saved ? JSON.parse(saved) : INITIAL_POSTS;
+      const saved = safeGetItem('mehfil_posts');
+      if (saved) {
+        const parsed: Post[] = JSON.parse(saved);
+        return parsed.filter(p => !MOCK_IDS.includes(p.authorId));
+      }
+      return INITIAL_POSTS;
     } catch {
       return INITIAL_POSTS;
     }
@@ -84,145 +97,73 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Stories State
   const [stories, setStories] = useState<Story[]>(() => {
     try {
-      const saved = localStorage.getItem('mehfil_stories');
-      return saved ? JSON.parse(saved) : INITIAL_STORIES;
+      const saved = safeGetItem('mehfil_stories');
+      if (saved) {
+        const parsed: Story[] = JSON.parse(saved);
+        return parsed.filter(s => !MOCK_IDS.includes(s.authorId));
+      }
+      return INITIAL_STORIES;
     } catch {
       return INITIAL_STORIES;
     }
   });
 
-  // Initial messages by chat mapping
+  // Messages map (Scrub mock messages)
   const [messagesByChat, setMessagesByChat] = useState<Record<string, Message[]>>(() => {
     try {
-      const saved = localStorage.getItem('mehfil_messages_by_chat');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-
-    // Pre-populate with initial conversations using deterministic IDs
-    const currentId = 'user_current';
-    const initialMap: Record<string, Message[]> = {};
-
-    const zoyaChatId = getDeterministicChatId(currentId, 'user_zoya');
-    initialMap[zoyaChatId] = [
-      {
-        id: 'm_zoya_1',
-        conversationId: zoyaChatId,
-        senderId: 'user_zoya',
-        senderName: 'Zoya Khan',
-        senderAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80',
-        text: 'Bilal! Sending you the exclusive pass for our Lahore acoustic concert tonight! 🎫✨',
-        createdAt: '10:15 AM',
-        seen: false,
-      },
-    ];
-
-    const hamzaChatId = getDeterministicChatId(currentId, 'user_hamza');
-    initialMap[hamzaChatId] = [
-      {
-        id: 'm_hamza_1',
-        conversationId: hamzaChatId,
-        senderId: currentId,
-        senderName: 'Bilal Ahmed',
-        senderAvatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=500&auto=format&fit=crop&q=80',
-        text: 'Thanks for the route details for Hunza! Planning to hit the road next Wednesday.',
-        createdAt: 'Yesterday',
-        seen: true,
-      },
-    ];
-
-    const daniyalChatId = getDeterministicChatId(currentId, 'user_daniyal');
-    initialMap[daniyalChatId] = [
-      {
-        id: 'm_daniyal_1',
-        conversationId: daniyalChatId,
-        senderId: 'user_daniyal',
-        senderName: 'Chef Daniyal',
-        senderAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=500&auto=format&fit=crop&q=80',
-        text: 'Hey Bilal, drop by the kitchen when you are in Gulberg, special deg is waiting!',
-        createdAt: '2 days ago',
-        seen: true,
-      },
-    ];
-
-    return initialMap;
+      const saved = safeGetItem('mehfil_messages_by_chat');
+      if (saved) {
+        const parsed: Record<string, Message[]> = JSON.parse(saved);
+        const cleaned: Record<string, Message[]> = {};
+        for (const [key, msgList] of Object.entries(parsed)) {
+          const hasMock = key.split('_').some(id => MOCK_IDS.includes(id));
+          if (!hasMock) {
+            cleaned[key] = msgList;
+          }
+        }
+        return cleaned;
+      }
+      return {};
+    } catch {
+      return {};
+    }
   });
 
-  // Conversations State
+  // Conversations State (Scrub mock conversations)
   const [conversations, setConversations] = useState<Conversation[]>(() => {
     try {
-      const saved = localStorage.getItem('mehfil_conversations');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-
-    const currentId = 'user_current';
-    return [
-      {
-        id: getDeterministicChatId(currentId, 'user_zoya'),
-        participantIds: [currentId, 'user_zoya'].sort(),
-        otherUser: users.find(u => u.id === 'user_zoya') || ({} as User),
-        lastMessage: {
-          id: 'm_zoya_1',
-          conversationId: getDeterministicChatId(currentId, 'user_zoya'),
-          senderId: 'user_zoya',
-          senderName: 'Zoya Khan',
-          senderAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80',
-          text: 'Bilal! Sending you the exclusive pass for our Lahore acoustic concert tonight! 🎫✨',
-          createdAt: '10:15 AM',
-          seen: false,
-        },
-        lastMessageTime: '2026-11-01T02:10:00Z',
-        unreadCount: 1,
-        updatedAt: '2026-11-01T02:10:00Z',
-        isRequest: false,
-      },
-      {
-        id: getDeterministicChatId(currentId, 'user_hamza'),
-        participantIds: [currentId, 'user_hamza'].sort(),
-        otherUser: users.find(u => u.id === 'user_hamza') || ({} as User),
-        lastMessage: {
-          id: 'm_hamza_1',
-          conversationId: getDeterministicChatId(currentId, 'user_hamza'),
-          senderId: currentId,
-          senderName: 'Bilal Ahmed',
-          senderAvatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=500&auto=format&fit=crop&q=80',
-          text: 'Thanks for the route details for Hunza! Planning to hit the road next Wednesday.',
-          createdAt: 'Yesterday',
-          seen: true,
-        },
-        lastMessageTime: '2026-10-31T22:30:00Z',
-        unreadCount: 0,
-        updatedAt: '2026-10-31T22:30:00Z',
-        isRequest: false,
-      },
-      {
-        id: getDeterministicChatId(currentId, 'user_daniyal'),
-        participantIds: [currentId, 'user_daniyal'].sort(),
-        otherUser: users.find(u => u.id === 'user_daniyal') || ({} as User),
-        lastMessage: {
-          id: 'm_daniyal_1',
-          conversationId: getDeterministicChatId(currentId, 'user_daniyal'),
-          senderId: 'user_daniyal',
-          senderName: 'Chef Daniyal',
-          senderAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=500&auto=format&fit=crop&q=80',
-          text: 'Hey Bilal, drop by the kitchen when you are in Gulberg, special deg is waiting!',
-          createdAt: '2 days ago',
-          seen: true,
-        },
-        lastMessageTime: '2026-10-30T14:12:00Z',
-        unreadCount: 0,
-        updatedAt: '2026-10-30T14:12:00Z',
-        isRequest: false,
-      },
-    ];
+      const saved = safeGetItem('mehfil_conversations');
+      if (saved) {
+        const parsed: Conversation[] = JSON.parse(saved);
+        return parsed.filter(c => !c.participantIds.some(id => MOCK_IDS.includes(id)));
+      }
+      return INITIAL_CONVERSATIONS;
+    } catch {
+      return INITIAL_CONVERSATIONS;
+    }
   });
 
   // Notifications State
   const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
     try {
-      const saved = localStorage.getItem('mehfil_notifications');
-      return saved ? JSON.parse(saved) : INITIAL_NOTIFICATIONS;
+      const saved = safeGetItem('mehfil_notifications');
+      if (saved) {
+        const parsed: NotificationItem[] = JSON.parse(saved);
+        return parsed.filter(n => !MOCK_IDS.includes(n.senderId));
+      }
+      return INITIAL_NOTIFICATIONS;
     } catch {
       return INITIAL_NOTIFICATIONS;
+    }
+  });
+
+  // Reports State
+  const [reports, setReports] = useState<ReportItem[]>(() => {
+    try {
+      const saved = safeGetItem('mehfil_reports');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
     }
   });
 
@@ -234,26 +175,44 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [activeStoryIndex, setActiveStoryIndex] = useState<number | null>(null);
   const [isTypingUserId, setIsTypingUserId] = useState<string | null>(null);
 
-  // Sync to storage
+  // Restore from IndexedDB in case localStorage was quota-exceeded
   useEffect(() => {
-    localStorage.setItem('mehfil_posts', JSON.stringify(posts));
+    idbGet<Post[]>('mehfil_posts').then(savedPosts => {
+      if (savedPosts && savedPosts.length > 0) {
+        setPosts(prev => (prev.length === 0 ? savedPosts : prev));
+      }
+    });
+    idbGet<Story[]>('mehfil_stories').then(savedStories => {
+      if (savedStories && savedStories.length > 0) {
+        setStories(prev => (prev.length === 0 ? savedStories : prev));
+      }
+    });
+  }, []);
+
+  // Safe Sync to storage
+  useEffect(() => {
+    safeSetItem('mehfil_posts', JSON.stringify(posts));
   }, [posts]);
 
   useEffect(() => {
-    localStorage.setItem('mehfil_stories', JSON.stringify(stories));
+    safeSetItem('mehfil_stories', JSON.stringify(stories));
   }, [stories]);
 
   useEffect(() => {
-    localStorage.setItem('mehfil_conversations', JSON.stringify(conversations));
+    safeSetItem('mehfil_conversations', JSON.stringify(conversations));
   }, [conversations]);
 
   useEffect(() => {
-    localStorage.setItem('mehfil_messages_by_chat', JSON.stringify(messagesByChat));
+    safeSetItem('mehfil_messages_by_chat', JSON.stringify(messagesByChat));
   }, [messagesByChat]);
 
   useEffect(() => {
-    localStorage.setItem('mehfil_notifications', JSON.stringify(notifications));
+    safeSetItem('mehfil_notifications', JSON.stringify(notifications));
   }, [notifications]);
+
+  useEffect(() => {
+    safeSetItem('mehfil_reports', JSON.stringify(reports));
+  }, [reports]);
 
   // Handle URL hash changes for Post URLs: #/post/:postId
   useEffect(() => {
@@ -286,11 +245,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return posts.find(p => p.id === postId);
   }, [posts]);
 
-  const unreadNotificationCount = notifications.filter(n => !n.read).length;
-  const unreadMessageCount = conversations.reduce((acc, conv) => acc + (conv.unreadCount || 0), 0);
+  // Purely real badge counts
+  const unreadNotificationCount = notifications.filter(n => !n.read && n.recipientId === currentUser?.id).length;
+  const unreadMessageCount = conversations.reduce((acc, conv) => {
+    if (conv.participantIds.includes(currentUser?.id || '')) {
+      return acc + (conv.unreadCount || 0);
+    }
+    return acc;
+  }, 0);
 
   // ============================================================
-  // BUG 1: POSTS FULL VIEW & MUTATIONS
+  // POSTS FULL VIEW & MUTATIONS
   // ============================================================
   const editPost = (
     postId: string,
@@ -316,6 +281,33 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (activePostId === postId) {
       setActivePostId(null);
     }
+  };
+
+  const adminDeletePost = (postId: string) => {
+    const postToDelete = posts.find(p => p.id === postId);
+    if (postToDelete) {
+      const author = users.find(u => u.id === postToDelete.authorId);
+      if (author) {
+        updateUserById(author.id, { postsCount: Math.max(0, (author.postsCount || 1) - 1) });
+      }
+    }
+    setPosts(prev => prev.filter(p => p.id !== postId));
+    if (activePostId === postId) {
+      setActivePostId(null);
+    }
+  };
+
+  const adminDeleteComment = (postId: string, commentId: string) => {
+    setPosts(prev =>
+      prev.map(p => {
+        if (p.id !== postId) return p;
+        return {
+          ...p,
+          comments: p.comments.filter(c => c.id !== commentId),
+          commentsCount: Math.max(0, p.commentsCount - 1),
+        };
+      })
+    );
   };
 
   const toggleLikePost = (postId: string) => {
@@ -511,7 +503,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // ============================================================
-  // BUG 2: FOLLOWERS & FOLLOWING MANAGEMENT WITH SYNCHRONIZATION
+  // FOLLOWERS & FOLLOWING MANAGEMENT
   // ============================================================
   const followUser = (targetUserId: string) => {
     if (!currentUser || targetUserId === currentUser.id) return;
@@ -519,7 +511,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!targetUser) return;
 
     if (targetUser.isPrivate) {
-      // Private account: send follow request
       const updatedPending = [...(targetUser.pendingFollowRequests || []), currentUser.id];
       updateUserById(targetUserId, { pendingFollowRequests: updatedPending });
 
@@ -538,15 +529,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       setNotifications(prev => [newNotif, ...prev]);
     } else {
-      // Public account: instant follow
-      // 1. Update current user's following list & count
       const updatedFollowing = [...(currentUser.following || []), targetUserId];
       updateProfile({
         following: updatedFollowing,
         followingCount: (currentUser.followingCount || 0) + 1,
       });
 
-      // 2. Update target user's followers list & count
       const updatedFollowers = [...(targetUser.followers || []), currentUser.id];
       updateUserById(targetUserId, {
         followers: updatedFollowers,
@@ -573,14 +561,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!currentUser) return;
     const targetUser = users.find(u => u.id === targetUserId);
 
-    // 1. Update current user's following list & count
     const updatedFollowing = (currentUser.following || []).filter(id => id !== targetUserId);
     updateProfile({
       following: updatedFollowing,
       followingCount: Math.max(0, (currentUser.followingCount || 1) - 1),
     });
 
-    // 2. Update target user's followers list & count
     if (targetUser) {
       const updatedFollowers = (targetUser.followers || []).filter(id => id !== currentUser.id);
       updateUserById(targetUserId, {
@@ -590,7 +576,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Owner removes a follower from their own followers list
   const removeFollower = (userId: string, followerId: string) => {
     const ownerUser = users.find(u => u.id === userId);
     const followerUser = users.find(u => u.id === followerId);
@@ -616,12 +601,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!currentUser) return;
     const requesterUser = users.find(u => u.id === requesterId);
 
-    // Mark notification accepted
     setNotifications(prev =>
       prev.map(n => (n.id === notificationId ? { ...n, requestStatus: 'accepted', read: true } : n))
     );
 
-    // Update current user's followers
     const updatedFollowers = [...(currentUser.followers || []), requesterId];
     const updatedPending = (currentUser.pendingFollowRequests || []).filter(id => id !== requesterId);
     updateProfile({
@@ -630,7 +613,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       pendingFollowRequests: updatedPending,
     });
 
-    // Update requester user's following
     if (requesterUser) {
       const updatedFollowing = [...(requesterUser.following || []), currentUser.id];
       updateUserById(requesterId, {
@@ -650,7 +632,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // ============================================================
-  // BUG 3: REAL-TIME CHAT SYSTEM (Firestore onSnapshot Pattern)
+  // REAL-TIME CHAT SYSTEM
   // ============================================================
   const openOrCreateConversationWithUser = (targetUser: User): Conversation => {
     if (!currentUser) throw new Error('Must be logged in to chat');
@@ -663,7 +645,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return existing;
     }
 
-    // Check if users follow each other; if not, first message is marked as request
     const mutualFollow =
       (currentUser.following || []).includes(targetUser.id) &&
       (targetUser.following || []).includes(currentUser.id);
@@ -685,7 +666,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const getMessagesForChat = (chatId: string): Message[] => {
     const raw = messagesByChat[chatId] || [];
-    // Filter out messages deleted for the current user
     return raw.filter(m => !(m.deletedFor || []).includes(currentUser?.id || ''));
   };
 
@@ -704,7 +684,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       seen: false,
     };
 
-    // Update messages map
     setMessagesByChat(prev => {
       const existing = prev[chatId] || [];
       return {
@@ -713,7 +692,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     });
 
-    // Update conversation metadata
     setConversations(prev =>
       prev.map(conv => {
         if (conv.id !== chatId) return conv;
@@ -725,52 +703,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       })
     );
-
-    // Simulated response from mock creators
-    const conv = conversations.find(c => c.id === chatId);
-    if (conv && conv.otherUser && conv.otherUser.id.startsWith('user_')) {
-      const otherUser = conv.otherUser;
-      setIsTypingUserId(otherUser.id);
-
-      setTimeout(() => {
-        setIsTypingUserId(null);
-        const replyResponses = [
-          "Wah! Bohat khoob! ✨ Thanks for reaching out on Mehfil!",
-          "Assalam o Alaikum! Hope you're having an awesome week. Let's collaborate soon!",
-          "Loved this! Checking out your profile now 🎧🔥",
-          "Apna andaz, apni mehfil! Really appreciate the love brother!",
-        ];
-        const randomReply = replyResponses[Math.floor(Math.random() * replyResponses.length)];
-        const replyMsg: Message = {
-          id: `msg_reply_${Date.now()}`,
-          conversationId: chatId,
-          senderId: otherUser.id,
-          senderName: otherUser.name,
-          senderAvatar: otherUser.avatarUrl,
-          text: randomReply,
-          createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          seen: false,
-        };
-
-        setMessagesByChat(p => ({
-          ...p,
-          [chatId]: [...(p[chatId] || []), replyMsg],
-        }));
-
-        setConversations(cList =>
-          cList.map(c => {
-            if (c.id !== chatId) return c;
-            return {
-              ...c,
-              lastMessage: replyMsg,
-              lastMessageTime: new Date().toISOString(),
-              unreadCount: activeConversation?.id === chatId ? 0 : (c.unreadCount || 0) + 1,
-              updatedAt: new Date().toISOString(),
-            };
-          })
-        );
-      }, 2000);
-    }
   };
 
   const deleteMessage = (chatId: string, messageId: string, scope: 'me' | 'everyone') => {
@@ -787,7 +719,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             deletedForEveryone: true,
           };
         } else {
-          // Delete for me
           const deletedFor = m.deletedFor || [];
           return {
             ...m,
@@ -870,7 +801,70 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
-  const reportContent = (_contentId: string, _reason: string) => {};
+  // Content Reporting & Moderation
+  const reportContent = (contentId: string, reason: string, targetType: 'post' | 'user' = 'post') => {
+    if (!currentUser) return;
+    let targetDetails: any = undefined;
+
+    if (targetType === 'post') {
+      const p = posts.find(item => item.id === contentId);
+      if (p) {
+        targetDetails = {
+          caption: p.caption,
+          mediaUrl: p.thumbnailUrl || p.mediaUrl,
+          username: p.authorUsername,
+        };
+      }
+    } else {
+      const u = users.find(item => item.id === contentId);
+      if (u) {
+        targetDetails = {
+          username: u.username,
+          name: u.name,
+        };
+      }
+    }
+
+    const newReport: ReportItem = {
+      id: `rep_${Date.now()}`,
+      reporterId: currentUser.id,
+      reporterUsername: currentUser.username,
+      targetId: contentId,
+      targetType,
+      targetDetails,
+      reason,
+      createdAt: new Date().toISOString(),
+      status: 'pending',
+    };
+
+    setReports(prev => [newReport, ...prev]);
+  };
+
+  const dismissReport = (reportId: string) => {
+    setReports(prev =>
+      prev.map(r => (r.id === reportId ? { ...r, status: 'dismissed' as const } : r))
+    );
+  };
+
+  const actionReport = (reportId: string, actionType: 'delete_post' | 'ban_user') => {
+    const report = reports.find(r => r.id === reportId);
+    if (!report) return;
+
+    if (actionType === 'delete_post' && report.targetType === 'post') {
+      adminDeletePost(report.targetId);
+    } else if (actionType === 'ban_user') {
+      const targetUserId = report.targetType === 'user'
+        ? report.targetId
+        : posts.find(p => p.id === report.targetId)?.authorId;
+      if (targetUserId) {
+        banUser(targetUserId, `Violated community guidelines: ${report.reason}`, 'permanent');
+      }
+    }
+
+    setReports(prev =>
+      prev.map(r => (r.id === reportId ? { ...r, status: 'actioned' as const } : r))
+    );
+  };
 
   return (
     <DataContext.Provider
@@ -879,6 +873,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         stories,
         conversations,
         notifications,
+        reports,
         activeConversation,
         activePostId,
         activePostList,
@@ -891,6 +886,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         getPostById,
         editPost,
         deletePost,
+        adminDeletePost,
+        adminDeleteComment,
         toggleLikePost,
         toggleSavePost,
         addComment,
@@ -914,6 +911,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         closeStoryViewer,
         markNotificationsAsRead,
         reportContent,
+        dismissReport,
+        actionReport,
       }}
     >
       {children}

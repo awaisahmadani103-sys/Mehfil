@@ -11,6 +11,7 @@ import {
   X,
   Lock,
 } from 'lucide-react';
+import { Credits } from '../components/Credits';
 
 interface NotificationsScreenProps {
   onSelectUser: (userId: string) => void;
@@ -90,8 +91,12 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
       {/* Notifications List */}
       <div className="space-y-2">
         {filteredNotifs.length === 0 ? (
-          <div className="py-12 text-center text-zinc-500 text-xs">
-            No notifications in this category.
+          <div className="py-16 text-center text-zinc-500 text-xs bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-6">
+            <Bell className="w-8 h-8 mx-auto text-[#FACC15] mb-2" />
+            <p className="font-bold text-zinc-300">Nothing new yet.</p>
+            <p className="text-[11px] text-zinc-500 mt-0.5">
+              You will be notified when people follow you or interact with your posts.
+            </p>
           </div>
         ) : (
           filteredNotifs.map(notif => {
@@ -196,6 +201,9 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
           })
         )}
       </div>
+
+      {/* Mandatory Credits */}
+      <Credits className="pt-4" />
     </div>
   );
 };

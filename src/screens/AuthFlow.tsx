@@ -1,9 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Logo } from '../components/Logo';
+import { Credits } from '../components/Credits';
 import { GoogleSignInButton } from '../components/GoogleSignInButton';
 import { PasswordStrengthMeter } from '../components/PasswordStrengthMeter';
 import { useAuth } from '../context/AuthContext';
-import { Eye, EyeOff, CheckCircle2, XCircle, ArrowLeft, Mail, Lock, User as UserIcon, Sparkles } from 'lucide-react';
+import {
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  XCircle,
+  ArrowLeft,
+  Mail,
+  Lock,
+  User as UserIcon,
+  Sparkles,
+} from 'lucide-react';
 
 interface AuthFlowProps {
   initialView?: 'welcome' | 'login' | 'signup';
@@ -23,7 +34,6 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
     resendTimer,
     signupStep,
     setSignupStep,
-    switchUserDemo,
   } = useAuth();
 
   const [view, setView] = useState<'welcome' | 'login' | 'signup' | 'forgot'>(
@@ -215,22 +225,25 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#111111] text-white flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden">
+    <div className="min-h-screen w-full bg-[#111111] text-white flex flex-col justify-between items-center p-4 sm:p-6 relative overflow-hidden">
       {/* Background ambient accents */}
       <div className="absolute -top-32 -left-32 w-80 h-80 bg-[#FACC15]/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-32 -right-32 w-80 h-80 bg-[#EF4444]/15 rounded-full blur-3xl pointer-events-none" />
 
+      {/* Spacer for vertical balance */}
+      <div className="w-full h-2" />
+
       {/* Main Container Card */}
-      <div className="w-full max-w-md bg-zinc-950/90 border border-zinc-800/80 rounded-2xl p-6 sm:p-8 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.8)] relative z-10 transition-all">
+      <div className="w-full max-w-md bg-zinc-950/90 border border-zinc-800/80 rounded-3xl p-6 sm:p-8 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.8)] relative z-10 transition-all my-auto">
         {/* Error or Success notification */}
         {errorMessage && (
-          <div className="mb-4 p-3 bg-red-950/70 border border-red-800 text-red-200 text-sm rounded-xl flex items-center gap-2 animate-fadeIn">
+          <div className="mb-4 p-3 bg-red-950/70 border border-red-800 text-red-200 text-xs rounded-xl flex items-center gap-2 animate-fadeIn">
             <XCircle className="w-4 h-4 text-[#EF4444] shrink-0" />
             <span>{errorMessage}</span>
           </div>
         )}
         {successMessage && (
-          <div className="mb-4 p-3 bg-yellow-950/50 border border-[#FACC15]/40 text-yellow-200 text-sm rounded-xl flex items-center gap-2 animate-fadeIn">
+          <div className="mb-4 p-3 bg-yellow-950/50 border border-[#FACC15]/40 text-yellow-200 text-xs rounded-xl flex items-center gap-2 animate-fadeIn">
             <CheckCircle2 className="w-4 h-4 text-[#FACC15] shrink-0" />
             <span>{successMessage}</span>
           </div>
@@ -240,26 +253,26 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
         {/* SCREEN 1: WELCOME SCREEN                                     */}
         {/* ============================================================ */}
         {view === 'welcome' && (
-          <div className="flex flex-col items-center text-center space-y-7 py-4">
-            <Logo size="xl" showTagline={true} />
+          <div className="flex flex-col items-center text-center space-y-7 py-3">
+            <Logo variant="full" size="xl" animated={true} />
 
-            <div className="space-y-2 max-w-xs mx-auto">
+            <div className="space-y-1.5 max-w-xs mx-auto">
               <h2 className="text-xl font-bold text-zinc-100">
                 Join the Cultural Vibe
               </h2>
-              <p className="text-sm text-zinc-400">
+              <p className="text-xs text-zinc-400">
                 Discover trending reels, authentic stories, connect with friends, and share your world.
               </p>
             </div>
 
-            <div className="w-full space-y-3 pt-2">
+            <div className="w-full space-y-3 pt-1">
               <button
                 type="button"
                 onClick={() => {
                   setView('signup');
                   setErrorMessage(null);
                 }}
-                className="w-full bg-[#FACC15] hover:bg-[#eab308] text-black font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-yellow-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-base"
+                className="w-full bg-[#FACC15] hover:bg-[#eab308] text-black font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-yellow-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-sm"
               >
                 <Sparkles className="w-4 h-4 text-black" />
                 Sign up
@@ -271,49 +284,26 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
                   setView('login');
                   setErrorMessage(null);
                 }}
-                className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-semibold py-3.5 px-4 rounded-xl border border-zinc-700/80 active:scale-[0.98] transition-all text-base"
+                className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-semibold py-3.5 px-4 rounded-xl border border-zinc-700/80 active:scale-[0.98] transition-all text-sm"
               >
                 Log in
               </button>
             </div>
 
-            {/* Quick Demo Accounts Switcher for immediate testing */}
-            <div className="w-full pt-4 border-t border-zinc-800/80 text-left">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-                Quick Test Login (Demo Profiles)
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => switchUserDemo('user_current')}
-                  className="p-2 bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-left flex items-center gap-2 text-xs transition-colors"
-                >
-                  <img
-                    src="https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&auto=format&fit=crop&q=80"
-                    alt="Bilal"
-                    className="w-6 h-6 rounded-full object-cover"
-                  />
-                  <div className="truncate">
-                    <p className="font-semibold text-zinc-200 truncate">Bilal Ahmed</p>
-                    <p className="text-[10px] text-zinc-400">Creator</p>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => switchUserDemo('user_zoya')}
-                  className="p-2 bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-left flex items-center gap-2 text-xs transition-colors"
-                >
-                  <img
-                    src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
-                    alt="Zoya"
-                    className="w-6 h-6 rounded-full object-cover"
-                  />
-                  <div className="truncate">
-                    <p className="font-semibold text-zinc-200 truncate">Zoya Khan</p>
-                    <p className="text-[10px] text-[#FACC15]">Verified Artist</p>
-                  </div>
-                </button>
-              </div>
+            <div className="relative flex items-center justify-center w-full my-1">
+              <div className="border-t border-zinc-800 w-full" />
+              <span className="bg-zinc-950 px-3 text-[11px] text-zinc-500 uppercase tracking-wider absolute">
+                or continue with
+              </span>
+            </div>
+
+            {/* Official Continue with Google Button */}
+            <div className="w-full">
+              <GoogleSignInButton
+                onClick={handleGoogleAuth}
+                text="Continue with Google"
+                disabled={isSubmitting}
+              />
             </div>
           </div>
         )}
@@ -322,7 +312,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
         {/* SCREEN 2: SIGN UP SCREEN (Form & 6-digit Code Entry)          */}
         {/* ============================================================ */}
         {view === 'signup' && signupStep === 'form' && (
-          <div className="space-y-5">
+          <div className="space-y-4">
             <div className="flex items-center justify-between">
               <button
                 type="button"
@@ -332,7 +322,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <Logo size="sm" />
+              <Logo variant="compact" size="sm" />
               <div className="w-8" />
             </div>
 
@@ -341,7 +331,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
               <p className="text-xs text-zinc-400 mt-1">Join Mehfil to share your voice and connect</p>
             </div>
 
-            <form onSubmit={handleStartSignup} className="space-y-3.5">
+            <form onSubmit={handleStartSignup} className="space-y-3">
               {/* Full Name */}
               <div>
                 <label className="block text-xs font-medium text-zinc-300 mb-1">Full Name</label>
@@ -353,7 +343,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
                     value={fullName}
                     onChange={e => setFullName(e.target.value)}
                     placeholder="e.g. Ayla Noor"
-                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#FACC15] focus:outline-none text-white text-sm rounded-xl py-2.5 pl-10 pr-4 placeholder-zinc-500 transition-colors"
+                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#FACC15] focus:outline-none text-white text-xs rounded-xl py-2.5 pl-10 pr-4 placeholder-zinc-500 transition-colors"
                   />
                 </div>
               </div>
@@ -377,14 +367,14 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
                   )}
                 </div>
                 <div className="relative">
-                  <span className="absolute left-3.5 top-2.5 text-zinc-400 font-semibold text-sm">@</span>
+                  <span className="absolute left-3.5 top-2.5 text-zinc-400 font-semibold text-xs">@</span>
                   <input
                     type="text"
                     required
                     value={username}
                     onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
                     placeholder="unique_username"
-                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#FACC15] focus:outline-none text-white text-sm rounded-xl py-2.5 pl-8 pr-4 placeholder-zinc-500 transition-colors"
+                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#FACC15] focus:outline-none text-white text-xs rounded-xl py-2.5 pl-8 pr-4 placeholder-zinc-500 transition-colors"
                   />
                 </div>
               </div>
@@ -400,7 +390,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="you@domain.com"
-                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#FACC15] focus:outline-none text-white text-sm rounded-xl py-2.5 pl-10 pr-4 placeholder-zinc-500 transition-colors"
+                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#FACC15] focus:outline-none text-white text-xs rounded-xl py-2.5 pl-10 pr-4 placeholder-zinc-500 transition-colors"
                   />
                 </div>
               </div>
@@ -416,7 +406,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     placeholder="At least 6 characters"
-                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#FACC15] focus:outline-none text-white text-sm rounded-xl py-2.5 pl-10 pr-10 placeholder-zinc-500 transition-colors"
+                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#FACC15] focus:outline-none text-white text-xs rounded-xl py-2.5 pl-10 pr-10 placeholder-zinc-500 transition-colors"
                   />
                   <button
                     type="button"
@@ -440,7 +430,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
                     value={confirmPassword}
                     onChange={e => setConfirmPassword(e.target.value)}
                     placeholder="Re-enter password"
-                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#FACC15] focus:outline-none text-white text-sm rounded-xl py-2.5 pl-10 pr-10 placeholder-zinc-500 transition-colors"
+                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#FACC15] focus:outline-none text-white text-xs rounded-xl py-2.5 pl-10 pr-10 placeholder-zinc-500 transition-colors"
                   />
                   <button
                     type="button"
@@ -459,15 +449,15 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full mt-2 bg-[#FACC15] hover:bg-[#eab308] text-black font-bold py-3 px-4 rounded-xl active:scale-[0.98] transition-all disabled:opacity-60 text-sm shadow-md shadow-yellow-500/10"
+                className="w-full mt-2 bg-[#FACC15] hover:bg-[#eab308] text-black font-bold py-3 px-4 rounded-xl active:scale-[0.98] transition-all disabled:opacity-60 text-xs shadow-md shadow-yellow-500/10"
               >
                 {isSubmitting ? 'Sending code...' : 'Sign Up & Verify'}
               </button>
             </form>
 
-            <div className="relative flex items-center justify-center my-4">
+            <div className="relative flex items-center justify-center my-3">
               <div className="border-t border-zinc-800 w-full" />
-              <span className="bg-zinc-950 px-3 text-xs text-zinc-400 uppercase tracking-wider absolute">
+              <span className="bg-zinc-950 px-3 text-[11px] text-zinc-500 uppercase tracking-wider absolute">
                 or
               </span>
             </div>
@@ -509,7 +499,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <Logo size="sm" />
+              <Logo variant="compact" size="sm" />
               <div className="w-8" />
             </div>
 
@@ -524,12 +514,12 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
               </p>
             </div>
 
-            {/* Simulated verification helper banner so tester is never blocked */}
+            {/* Real code helper for testing verification */}
             {lastGeneratedCode && (
               <div className="p-3 bg-yellow-950/40 border border-[#FACC15]/30 rounded-xl text-center">
-                <p className="text-[11px] text-zinc-400">Demo Email Inbox Simulation:</p>
-                <p className="text-sm font-mono font-bold text-[#FACC15] tracking-widest mt-0.5">
-                  Code: {lastGeneratedCode}
+                <p className="text-[11px] text-zinc-400">Verification Code:</p>
+                <p className="text-base font-mono font-bold text-[#FACC15] tracking-widest mt-0.5">
+                  {lastGeneratedCode}
                 </p>
                 <button
                   type="button"
@@ -558,7 +548,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
               <button
                 type="submit"
                 disabled={isSubmitting || verificationCode.length !== 6}
-                className="w-full bg-[#FACC15] hover:bg-[#eab308] text-black font-bold py-3 px-4 rounded-xl active:scale-[0.98] transition-all disabled:opacity-60 text-sm shadow-md shadow-yellow-500/10"
+                className="w-full bg-[#FACC15] hover:bg-[#eab308] text-black font-bold py-3 px-4 rounded-xl active:scale-[0.98] transition-all disabled:opacity-60 text-xs shadow-md shadow-yellow-500/10"
               >
                 {isSubmitting ? 'Verifying...' : 'Verify & Continue'}
               </button>
@@ -589,7 +579,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
         {/* SCREEN 3: LOGIN SCREEN                                       */}
         {/* ============================================================ */}
         {view === 'login' && (
-          <div className="space-y-5">
+          <div className="space-y-4">
             <div className="flex items-center justify-between">
               <button
                 type="button"
@@ -599,7 +589,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <Logo size="sm" />
+              <Logo variant="compact" size="sm" />
               <div className="w-8" />
             </div>
 
@@ -621,7 +611,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
                     value={loginIdentifier}
                     onChange={e => setLoginIdentifier(e.target.value)}
                     placeholder="email@domain.com or username"
-                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#FACC15] focus:outline-none text-white text-sm rounded-xl py-2.5 pl-10 pr-4 placeholder-zinc-500 transition-colors"
+                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#FACC15] focus:outline-none text-white text-xs rounded-xl py-2.5 pl-10 pr-4 placeholder-zinc-500 transition-colors"
                   />
                 </div>
               </div>
@@ -648,7 +638,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
                     value={loginPassword}
                     onChange={e => setLoginPassword(e.target.value)}
                     placeholder="Enter your password"
-                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#FACC15] focus:outline-none text-white text-sm rounded-xl py-2.5 pl-10 pr-10 placeholder-zinc-500 transition-colors"
+                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#FACC15] focus:outline-none text-white text-xs rounded-xl py-2.5 pl-10 pr-10 placeholder-zinc-500 transition-colors"
                   />
                   <button
                     type="button"
@@ -663,15 +653,15 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full mt-2 bg-[#FACC15] hover:bg-[#eab308] text-black font-bold py-3 px-4 rounded-xl active:scale-[0.98] transition-all disabled:opacity-60 text-sm shadow-md shadow-yellow-500/10"
+                className="w-full mt-2 bg-[#FACC15] hover:bg-[#eab308] text-black font-bold py-3 px-4 rounded-xl active:scale-[0.98] transition-all disabled:opacity-60 text-xs shadow-md shadow-yellow-500/10"
               >
                 {isSubmitting ? 'Logging in...' : 'Log in'}
               </button>
             </form>
 
-            <div className="relative flex items-center justify-center my-4">
+            <div className="relative flex items-center justify-center my-3">
               <div className="border-t border-zinc-800 w-full" />
-              <span className="bg-zinc-950 px-3 text-xs text-zinc-400 uppercase tracking-wider absolute">
+              <span className="bg-zinc-950 px-3 text-[11px] text-zinc-500 uppercase tracking-wider absolute">
                 or
               </span>
             </div>
@@ -704,7 +694,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
         {/* FORGOT PASSWORD MODAL / SCREEN                               */}
         {/* ============================================================ */}
         {view === 'forgot' && (
-          <div className="space-y-5">
+          <div className="space-y-4">
             <div className="flex items-center justify-between">
               <button
                 type="button"
@@ -716,7 +706,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <Logo size="sm" />
+              <Logo variant="compact" size="sm" />
               <div className="w-8" />
             </div>
 
@@ -730,7 +720,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
             </div>
 
             {forgotStep === 'request' ? (
-              <form onSubmit={handleForgotRequest} className="space-y-4">
+              <form onSubmit={handleForgotRequest} className="space-y-3.5">
                 <div>
                   <label className="block text-xs font-medium text-zinc-300 mb-1">
                     Email or Username
@@ -741,22 +731,22 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
                     value={forgotIdentifier}
                     onChange={e => setForgotIdentifier(e.target.value)}
                     placeholder="Enter registered email or username"
-                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#FACC15] focus:outline-none text-white text-sm rounded-xl py-2.5 px-4 placeholder-zinc-500"
+                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#FACC15] focus:outline-none text-white text-xs rounded-xl py-2.5 px-4 placeholder-zinc-500"
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full bg-[#FACC15] hover:bg-[#eab308] text-black font-bold py-3 px-4 rounded-xl text-sm transition-all"
+                  className="w-full bg-[#FACC15] hover:bg-[#eab308] text-black font-bold py-3 px-4 rounded-xl text-xs transition-all"
                 >
                   {isSubmitting ? 'Sending code...' : 'Send Reset Code'}
                 </button>
               </form>
             ) : (
-              <form onSubmit={handleForgotComplete} className="space-y-4">
+              <form onSubmit={handleForgotComplete} className="space-y-3.5">
                 {demoResetCode && (
                   <div className="p-2 bg-yellow-950/40 border border-[#FACC15]/30 rounded-lg text-center text-xs">
-                    <span className="text-zinc-400">Demo Code: </span>
+                    <span className="text-zinc-400">Reset Code: </span>
                     <span className="font-mono font-bold text-[#FACC15]">{demoResetCode}</span>
                     <button
                       type="button"
@@ -777,7 +767,7 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
                     value={forgotCode}
                     onChange={e => setForgotCode(e.target.value)}
                     placeholder="123456"
-                    className="w-full font-mono text-center tracking-widest bg-zinc-900 border border-zinc-700 focus:border-[#FACC15] focus:outline-none text-white text-sm rounded-xl py-2.5 px-4"
+                    className="w-full font-mono text-center tracking-widest bg-zinc-900 border border-zinc-700 focus:border-[#FACC15] focus:outline-none text-white text-xs rounded-xl py-2.5 px-4"
                   />
                 </div>
                 <div>
@@ -788,13 +778,13 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
                     value={newPassword}
                     onChange={e => setNewPassword(e.target.value)}
                     placeholder="At least 6 characters"
-                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#FACC15] focus:outline-none text-white text-sm rounded-xl py-2.5 px-4"
+                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#FACC15] focus:outline-none text-white text-xs rounded-xl py-2.5 px-4"
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full bg-[#FACC15] hover:bg-[#eab308] text-black font-bold py-3 px-4 rounded-xl text-sm transition-all"
+                  className="w-full bg-[#FACC15] hover:bg-[#eab308] text-black font-bold py-3 px-4 rounded-xl text-xs transition-all"
                 >
                   {isSubmitting ? 'Updating...' : 'Set New Password'}
                 </button>
@@ -802,6 +792,11 @@ export const AuthFlow: React.FC<AuthFlowProps> = ({ initialView = 'welcome' }) =
             )}
           </div>
         )}
+      </div>
+
+      {/* Mandatory Credits at the bottom of the interface */}
+      <div className="w-full max-w-md pb-2">
+        <Credits />
       </div>
     </div>
   );

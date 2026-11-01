@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { Credits } from '../components/Credits';
 import { isFirebaseConfigured } from '../firebase/config';
 import {
   Lock,
@@ -14,19 +15,24 @@ import {
   X,
   ChevronRight,
   AlertTriangle,
+  ShieldAlert,
+  Info,
 } from 'lucide-react';
 
 interface SettingsScreenProps {
   onBack: () => void;
   onOpenEditProfile: () => void;
+  onOpenAdminPanel?: () => void;
 }
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onBack,
   onOpenEditProfile,
+  onOpenAdminPanel,
 }) => {
   const {
     currentUser,
+    isAdmin,
     togglePrivacy,
     unblockUser,
     logout,
@@ -95,6 +101,34 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <h2 className="text-xl font-bold text-white">Settings</h2>
         </div>
       </div>
+
+      {/* Admin Quick Action (Only for Administrators) */}
+      {isAdmin && onOpenAdminPanel && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-[#FACC15] uppercase tracking-wider px-1">
+            Administrator Tools
+          </p>
+          <button
+            onClick={onOpenAdminPanel}
+            className="w-full p-4 bg-gradient-to-r from-red-950/40 via-zinc-950 to-yellow-950/30 border border-[#FACC15]/40 rounded-2xl flex items-center justify-between hover:border-[#FACC15] transition-all text-left text-xs group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[#FACC15] text-black flex items-center justify-center font-black">
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="font-extrabold text-white group-hover:text-[#FACC15] transition-colors">
+                  Mehfil Admin Console
+                </p>
+                <p className="text-[11px] text-zinc-400 mt-0.5">
+                  Manage users, apply bans, audit logs & moderate content
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-[#FACC15]" />
+          </button>
+        </div>
+      )}
 
       {/* Account Section */}
       <div className="space-y-2">
@@ -259,8 +293,35 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </button>
       </div>
 
+      {/* About & Credits Section */}
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider px-1">
+          About Mehfil
+        </p>
+        <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 text-xs space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="font-bold text-white flex items-center gap-1.5">
+              <Info className="w-4 h-4 text-[#FACC15]" />
+              Mehfil Social Platform
+            </span>
+            <span className="text-[10px] text-zinc-500 font-mono">v2.5</span>
+          </div>
+          <p className="text-zinc-400 text-[11px] leading-relaxed">
+            "Apna andaz. Apni mehfil." A modern cultural social media web app fusing short-form video reels, photo feeds, instant stories, and direct messaging.
+          </p>
+          <div className="pt-2 border-t border-zinc-900 text-[11px] space-y-0.5 text-zinc-400">
+            <p>
+              Created by <strong className="text-[#FACC15]">Malik Shahmeer</strong>
+            </p>
+            <p>
+              Idea of <strong className="text-[#FACC15]">Awais Ahmadani</strong>
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Danger Zone & Logout */}
-      <div className="space-y-2 pt-2">
+      <div className="space-y-2 pt-1">
         <div className="bg-zinc-950 border border-zinc-800 rounded-2xl divide-y divide-zinc-800/80 overflow-hidden text-xs">
           <button
             onClick={logout}
@@ -285,6 +346,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Mandatory Credits at the bottom */}
+      <Credits className="pt-2" />
 
       {/* ============================================================ */}
       {/* BLOCKED USERS MODAL                                          */}

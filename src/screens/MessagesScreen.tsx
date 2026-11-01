@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Conversation, Message, User } from '../types';
+import { Credits } from '../components/Credits';
+import { compressImageFile } from '../utils/storage';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import {
@@ -88,16 +90,21 @@ export const MessagesScreen: React.FC<MessagesScreenProps> = ({ onSelectUser }) 
     }
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          setSelectedPhoto(reader.result);
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImageFile(file, 800, 0.7);
+        setSelectedPhoto(compressed);
+      } catch {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === 'string') {
+            setSelectedPhoto(reader.result);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
@@ -566,13 +573,11 @@ export const MessagesScreen: React.FC<MessagesScreenProps> = ({ onSelectUser }) 
       {/* Conversation List */}
       <div className="space-y-2">
         {filteredConversations.length === 0 ? (
-          <div className="py-12 text-center space-y-2 text-zinc-500">
-            <AlertCircle className="w-8 h-8 mx-auto text-zinc-600" />
-            <p className="text-xs font-semibold text-zinc-400">No conversations in this tab</p>
-            <p className="text-[11px]">
-              {activeTab === 'requests'
-                ? 'Messages from users who don’t follow you will appear here.'
-                : 'Find creators in Search and tap Message to begin!'}
+          <div className="py-16 text-center space-y-2 text-zinc-500 bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-6">
+            <AlertCircle className="w-8 h-8 mx-auto text-[#FACC15]" />
+            <p className="text-xs font-bold text-zinc-200">No messages yet.</p>
+            <p className="text-[11px] text-zinc-400">
+              Open a profile and tap Message.
             </p>
           </div>
         ) : (
@@ -623,6 +628,9 @@ export const MessagesScreen: React.FC<MessagesScreenProps> = ({ onSelectUser }) 
           })
         )}
       </div>
+
+      {/* Mandatory Credits */}
+      <Credits className="pt-4" />
     </div>
   );
 };

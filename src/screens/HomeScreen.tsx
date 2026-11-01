@@ -1,32 +1,36 @@
 import React, { useState } from 'react';
 import { Logo } from '../components/Logo';
+import { Credits } from '../components/Credits';
 import { StoriesRow } from '../components/StoriesRow';
 import { VideoFeed } from './VideoFeed';
 import { PhotoPostCard } from '../components/PhotoPostCard';
 import { useData } from '../context/DataContext';
-import { Bell, Send, Sparkles, Film, Image as ImageIcon } from 'lucide-react';
+import { Bell, Send, Sparkles, Film, Image as ImageIcon, PlusSquare } from 'lucide-react';
 
 interface HomeScreenProps {
   onSelectUser: (userId: string) => void;
   onOpenNotifications: () => void;
   onOpenMessages: () => void;
+  onOpenUpload?: () => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   onSelectUser,
   onOpenNotifications,
   onOpenMessages,
+  onOpenUpload,
 }) => {
   const { posts, stories, unreadNotificationCount, unreadMessageCount } = useData();
   const [feedMode, setFeedMode] = useState<'reels' | 'feed'>('reels');
 
   const photoPosts = posts.filter(p => p.type === 'photo');
+  const videoPosts = posts.filter(p => p.type === 'video');
 
   return (
     <div className="w-full max-w-lg mx-auto pb-24">
       {/* Top App Header */}
       <header className="sticky top-0 z-30 bg-[#111111]/90 backdrop-blur-md border-b border-zinc-800/80 px-4 py-3 flex items-center justify-between">
-        <Logo size="md" />
+        <Logo variant="compact" size="sm" />
 
         {/* Feed Mode Switcher (TikTok Reels vs Photo Feed) */}
         <div className="flex items-center gap-1 bg-zinc-900/90 border border-zinc-800 p-0.5 rounded-xl">
@@ -90,14 +94,52 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Main Feed Content Area */}
       <main className="pt-3 px-2">
         {feedMode === 'reels' ? (
-          <VideoFeed onSelectUser={onSelectUser} />
+          videoPosts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 space-y-4 bg-zinc-950/60 border border-zinc-800/80 rounded-3xl mx-2">
+              <div className="w-16 h-16 rounded-full bg-yellow-950/40 border border-[#FACC15]/30 flex items-center justify-center text-[#FACC15] shadow-lg shadow-yellow-950/30">
+                <Film className="w-8 h-8" />
+              </div>
+              <div className="space-y-1 max-w-xs">
+                <h3 className="font-bold text-white text-base">No video reels yet</h3>
+                <p className="text-zinc-400 text-xs leading-relaxed">
+                  No posts yet. Follow people or create your first post on Mehfil!
+                </p>
+              </div>
+              {onOpenUpload && (
+                <button
+                  onClick={onOpenUpload}
+                  className="bg-[#FACC15] hover:bg-[#eab308] text-black font-bold px-5 py-2.5 rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-yellow-500/10 active:scale-95 transition-all"
+                >
+                  <PlusSquare className="w-4 h-4 text-black" />
+                  <span>Create Post</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            <VideoFeed onSelectUser={onSelectUser} />
+          )
         ) : (
           <div className="space-y-4">
             {photoPosts.length === 0 ? (
-              <div className="text-center py-16 space-y-2 text-zinc-500 text-xs">
-                <Sparkles className="w-8 h-8 mx-auto text-[#FACC15]" />
-                <p className="font-semibold text-zinc-300">No photo posts yet</p>
-                <p>Tap the + button to upload the first photo!</p>
+              <div className="flex flex-col items-center justify-center min-h-[50vh] text-center p-6 space-y-4 bg-zinc-950/60 border border-zinc-800/80 rounded-3xl mx-2">
+                <div className="w-16 h-16 rounded-full bg-yellow-950/40 border border-[#FACC15]/30 flex items-center justify-center text-[#FACC15]">
+                  <Sparkles className="w-8 h-8" />
+                </div>
+                <div className="space-y-1 max-w-xs">
+                  <h3 className="font-bold text-white text-base">No photo posts yet</h3>
+                  <p className="text-zinc-400 text-xs leading-relaxed">
+                    No posts yet. Follow people or create your first post!
+                  </p>
+                </div>
+                {onOpenUpload && (
+                  <button
+                    onClick={onOpenUpload}
+                    className="bg-[#FACC15] hover:bg-[#eab308] text-black font-bold px-5 py-2.5 rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-yellow-500/10 active:scale-95 transition-all"
+                  >
+                    <PlusSquare className="w-4 h-4 text-black" />
+                    <span>Create Post</span>
+                  </button>
+                )}
               </div>
             ) : (
               photoPosts.map(post => (
@@ -110,6 +152,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             )}
           </div>
         )}
+
+        {/* Mandatory Credits at the bottom of the feed */}
+        <Credits className="mt-8" />
       </main>
     </div>
   );

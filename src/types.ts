@@ -19,6 +19,11 @@ export interface User {
   followers: string[]; // user IDs
   following: string[]; // user IDs
   pendingFollowRequests: string[]; // user IDs of people who requested to follow this user
+  // Admin & Safety
+  role?: 'admin' | 'user';
+  status?: 'active' | 'banned';
+  banReason?: string;
+  banExpiresAt?: string; // ISO date string or 'permanent'
 }
 
 export interface Comment {
@@ -123,9 +128,45 @@ export interface FollowListItem {
   isPrivate?: boolean;
 }
 
+export interface ReportItem {
+  id: string;
+  reporterId: string;
+  reporterUsername: string;
+  targetId: string;
+  targetType: 'post' | 'user';
+  targetDetails?: {
+    caption?: string;
+    mediaUrl?: string;
+    username?: string;
+    name?: string;
+  };
+  reason: string;
+  createdAt: string;
+  status: 'pending' | 'dismissed' | 'actioned';
+}
+
+export interface AdminActivityLog {
+  id: string;
+  adminId: string;
+  adminEmail: string;
+  action:
+    | 'ban'
+    | 'unban'
+    | 'delete_user'
+    | 'delete_post'
+    | 'delete_comment'
+    | 'promote_admin'
+    | 'demote_admin';
+  targetId: string;
+  targetName: string;
+  reason?: string;
+  timestamp: string;
+}
+
 export interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   needsProfileSetup: boolean;
+  isAdmin: boolean;
 }
