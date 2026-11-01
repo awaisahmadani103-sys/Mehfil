@@ -3,19 +3,24 @@ import { Story } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { Plus } from 'lucide-react';
+import { compressImageFile } from '../utils/storage';
 
 interface StoriesRowProps {
-  stories: Story[];
+  stories?: Story[];
 }
 
-export const StoriesRow: React.FC<StoriesRowProps> = ({ stories }) => {
+export const StoriesRow: React.FC<StoriesRowProps> = ({ stories = [] }) => {
   const { currentUser } = useAuth();
   const { openStoryViewer, createStory } = useData();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Robust array guard to guarantee stories is an array
+  const safeStories: Story[] = Array.isArray(stories) ? stories : [];
+
   // Group stories by author
   const storyAuthorsMap = new Map<string, Story[]>();
-  stories.forEach(s => {
+  safeStories.forEach(s => {
+    if (!s || !s.authorId) return;
     const list = storyAuthorsMap.get(s.authorId) || [];
     list.push(s);
     storyAuthorsMap.set(s.authorId, list);
@@ -24,7 +29,7 @@ export const StoriesRow: React.FC<StoriesRowProps> = ({ stories }) => {
   const uniqueAuthors = Array.from(storyAuthorsMap.entries()).map(([_authorId, authorStories]) => {
     const first = authorStories[0];
     const allViewed = authorStories.every(
-      s => currentUser && s.viewedBy.includes(currentUser.id)
+      s => currentUser && s.viewedBy && s.viewedBy.includes(currentUser.id)
     );
     return {
       authorId: first.authorId,
@@ -36,16 +41,26 @@ export const StoriesRow: React.FC<StoriesRowProps> = ({ stories }) => {
     };
   });
 
-  const handleAddStory = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAddStory = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          createStory(reader.result, 'image', 'New story on Mehfil ✨');
+      try {
+        if (file.type.startsWith('image/')) {
+          const compressed = await compressImageFile(file, 1080, 0.75);
+          createStory(compressed, 'image', 'New story on Mehfil ✨');
+        } else {
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (typeof reader.result === 'string') {
+              createStory(reader.result, 'video', 'New story on Mehfil ✨');
+            }
+          };
+          reader.readAsDataURL(file);
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.error('Failed to upload story:', err);
+      }
+      if (e.target) e.target.value = '';
     }
   };
 

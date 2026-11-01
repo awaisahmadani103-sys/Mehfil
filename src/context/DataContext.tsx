@@ -85,8 +85,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const saved = safeGetItem('mehfil_posts');
       if (saved) {
-        const parsed: Post[] = JSON.parse(saved);
-        return parsed.filter(p => !MOCK_IDS.includes(p.authorId));
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(p => p && typeof p === 'object' && !MOCK_IDS.includes(p.authorId));
+        }
       }
       return INITIAL_POSTS;
     } catch {
@@ -99,8 +101,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const saved = safeGetItem('mehfil_stories');
       if (saved) {
-        const parsed: Story[] = JSON.parse(saved);
-        return parsed.filter(s => !MOCK_IDS.includes(s.authorId));
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(s => s && typeof s === 'object' && !MOCK_IDS.includes(s.authorId));
+        }
       }
       return INITIAL_STORIES;
     } catch {
@@ -113,15 +117,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const saved = safeGetItem('mehfil_messages_by_chat');
       if (saved) {
-        const parsed: Record<string, Message[]> = JSON.parse(saved);
-        const cleaned: Record<string, Message[]> = {};
-        for (const [key, msgList] of Object.entries(parsed)) {
-          const hasMock = key.split('_').some(id => MOCK_IDS.includes(id));
-          if (!hasMock) {
-            cleaned[key] = msgList;
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          const cleaned: Record<string, Message[]> = {};
+          for (const [key, msgList] of Object.entries(parsed as Record<string, Message[]>)) {
+            const hasMock = key.split('_').some(id => MOCK_IDS.includes(id));
+            if (!hasMock && Array.isArray(msgList)) {
+              cleaned[key] = msgList;
+            }
           }
+          return cleaned;
         }
-        return cleaned;
       }
       return {};
     } catch {
@@ -134,8 +140,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const saved = safeGetItem('mehfil_conversations');
       if (saved) {
-        const parsed: Conversation[] = JSON.parse(saved);
-        return parsed.filter(c => !c.participantIds.some(id => MOCK_IDS.includes(id)));
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return (parsed as Conversation[]).filter(c => c && Array.isArray(c.participantIds) && !c.participantIds.some((id: string) => MOCK_IDS.includes(id)));
+        }
       }
       return INITIAL_CONVERSATIONS;
     } catch {
@@ -148,8 +156,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const saved = safeGetItem('mehfil_notifications');
       if (saved) {
-        const parsed: NotificationItem[] = JSON.parse(saved);
-        return parsed.filter(n => !MOCK_IDS.includes(n.senderId));
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(n => n && typeof n === 'object' && !MOCK_IDS.includes(n.senderId));
+        }
       }
       return INITIAL_NOTIFICATIONS;
     } catch {
@@ -161,7 +171,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [reports, setReports] = useState<ReportItem[]>(() => {
     try {
       const saved = safeGetItem('mehfil_reports');
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      }
+      return [];
     } catch {
       return [];
     }
@@ -177,14 +193,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Restore from IndexedDB in case localStorage was quota-exceeded
   useEffect(() => {
-    idbGet<Post[]>('mehfil_posts').then(savedPosts => {
-      if (savedPosts && savedPosts.length > 0) {
-        setPosts(prev => (prev.length === 0 ? savedPosts : prev));
+    idbGet<any>('mehfil_posts').then(savedPosts => {
+      let parsed = savedPosts;
+      if (typeof parsed === 'string') {
+        try { parsed = JSON.parse(parsed); } catch { parsed = []; }
+      }
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const cleaned = parsed.filter(p => p && typeof p === 'object' && !MOCK_IDS.includes(p.authorId));
+        setPosts(prev => {
+          const safePrev = Array.isArray(prev) ? prev : [];
+          return safePrev.length === 0 ? cleaned : safePrev;
+        });
       }
     });
-    idbGet<Story[]>('mehfil_stories').then(savedStories => {
-      if (savedStories && savedStories.length > 0) {
-        setStories(prev => (prev.length === 0 ? savedStories : prev));
+
+    idbGet<any>('mehfil_stories').then(savedStories => {
+      let parsed = savedStories;
+      if (typeof parsed === 'string') {
+        try { parsed = JSON.parse(parsed); } catch { parsed = []; }
+      }
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const cleaned = parsed.filter(s => s && typeof s === 'object' && !MOCK_IDS.includes(s.authorId));
+        setStories(prev => {
+          const safePrev = Array.isArray(prev) ? prev : [];
+          return safePrev.length === 0 ? cleaned : safePrev;
+        });
       }
     });
   }, []);
@@ -773,22 +806,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createdAt: new Date().toISOString(),
       viewedBy: [currentUser.id],
     };
-    setStories(prev => [newStory, ...prev]);
+    setStories(prev => [newStory, ...(Array.isArray(prev) ? prev : [])]);
   };
 
   const viewStory = (storyId: string) => {
     if (!currentUser) return;
-    setStories(prev =>
-      prev.map(s => {
+    setStories(prev => {
+      const list = Array.isArray(prev) ? prev : [];
+      return list.map(s => {
         if (s.id !== storyId) return s;
-        if (s.viewedBy.includes(currentUser.id)) return s;
-        return { ...s, viewedBy: [...s.viewedBy, currentUser.id] };
-      })
-    );
+        if (s.viewedBy && s.viewedBy.includes(currentUser.id)) return s;
+        return { ...s, viewedBy: [...(s.viewedBy || []), currentUser.id] };
+      });
+    });
   };
 
   const openStoryViewer = (storyList: Story[], startIndex = 0) => {
-    setActiveStoryUserStories(storyList);
+    setActiveStoryUserStories(Array.isArray(storyList) ? storyList : []);
     setActiveStoryIndex(startIndex);
   };
 

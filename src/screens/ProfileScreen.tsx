@@ -83,9 +83,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   }
 
   // Filter posts
-  const userPosts = posts.filter(p => p.authorId === profileUser.id);
-  const userVideos = userPosts.filter(p => p.type === 'video');
-  const savedPosts = posts.filter(p => currentUser?.savedPosts?.includes(p.id));
+  const safePosts = Array.isArray(posts) ? posts : [];
+  const userPosts = safePosts.filter(p => p && p.authorId === profileUser.id);
+  const userVideos = userPosts.filter(p => p && p.type === 'video');
+  const savedPosts = safePosts.filter(p => p && currentUser?.savedPosts?.includes(p.id));
 
   const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

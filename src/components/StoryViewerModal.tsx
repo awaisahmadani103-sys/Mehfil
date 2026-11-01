@@ -10,11 +10,12 @@ interface StoryViewerModalProps {
 }
 
 export const StoryViewerModal: React.FC<StoryViewerModalProps> = ({
-  stories,
+  stories = [],
   initialIndex = 0,
   onClose,
 }) => {
   const { viewStory, sendMessage, openOrCreateConversationWithUser } = useData();
+  const safeStories = Array.isArray(stories) ? stories : [];
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -22,7 +23,7 @@ export const StoryViewerModal: React.FC<StoryViewerModalProps> = ({
   const [liked, setLiked] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const currentStory = stories[currentIndex];
+  const currentStory = safeStories[currentIndex];
   const STORY_DURATION = 6000; // 6 seconds per story
 
   useEffect(() => {
@@ -34,7 +35,7 @@ export const StoryViewerModal: React.FC<StoryViewerModalProps> = ({
   }, [currentIndex, currentStory]);
 
   useEffect(() => {
-    if (isPaused || !currentStory) return;
+    if (isPaused || !currentStory || safeStories.length === 0) return;
 
     const interval = 50; // update progress every 50ms
     const step = (interval / STORY_DURATION) * 100;
@@ -42,7 +43,7 @@ export const StoryViewerModal: React.FC<StoryViewerModalProps> = ({
     const timer = setInterval(() => {
       setProgress(prev => {
         if (prev >= 100) {
-          if (currentIndex < stories.length - 1) {
+          if (currentIndex < safeStories.length - 1) {
             setCurrentIndex(i => i + 1);
             return 0;
           } else {
@@ -55,7 +56,7 @@ export const StoryViewerModal: React.FC<StoryViewerModalProps> = ({
     }, interval);
 
     return () => clearInterval(timer);
-  }, [currentIndex, isPaused, stories.length]);
+  }, [currentIndex, isPaused, currentStory, safeStories.length]);
 
   const handlePrev = (e?: React.MouseEvent) => {
     e?.stopPropagation();

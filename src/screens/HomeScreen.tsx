@@ -20,11 +20,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onOpenMessages,
   onOpenUpload,
 }) => {
-  const { posts, stories, unreadNotificationCount, unreadMessageCount } = useData();
+  const { posts = [], stories = [], unreadNotificationCount = 0, unreadMessageCount = 0 } = useData();
   const [feedMode, setFeedMode] = useState<'reels' | 'feed'>('reels');
 
-  const photoPosts = posts.filter(p => p.type === 'photo');
-  const videoPosts = posts.filter(p => p.type === 'video');
+  const safePosts = Array.isArray(posts) ? posts : [];
+  const safeStories = Array.isArray(stories) ? stories : [];
+
+  const photoPosts = safePosts.filter(p => p && p.type === 'photo');
+  const videoPosts = safePosts.filter(p => p && p.type === 'video');
 
   return (
     <div className="w-full max-w-lg mx-auto pb-24">
@@ -89,7 +92,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       </header>
 
       {/* Stories Row on top (Instagram Style) */}
-      <StoriesRow stories={stories} />
+      <StoriesRow stories={safeStories} />
 
       {/* Main Feed Content Area */}
       <main className="pt-3 px-2">

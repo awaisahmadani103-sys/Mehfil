@@ -18,24 +18,29 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({ onSelectUser }) => {
 
   const cleanQuery = searchTerm.trim().toLowerCase().replace(/^#|^@/, '');
 
+  const safeUsers = Array.isArray(users) ? users : [];
+  const safePosts = Array.isArray(posts) ? posts : [];
+
   // Filter users (exclude current user from search suggestions if desirable, or show with "You" badge)
-  const filteredUsers = users.filter(u => {
+  const filteredUsers = safeUsers.filter(u => {
+    if (!u) return false;
     if (!cleanQuery) return true;
     return (
-      u.name.toLowerCase().includes(cleanQuery) ||
-      u.username.toLowerCase().includes(cleanQuery) ||
-      u.bio.toLowerCase().includes(cleanQuery)
+      (u.name || '').toLowerCase().includes(cleanQuery) ||
+      (u.username || '').toLowerCase().includes(cleanQuery) ||
+      (u.bio || '').toLowerCase().includes(cleanQuery)
     );
   });
 
   // Filter posts
-  const filteredPosts = posts.filter(p => {
+  const filteredPosts = safePosts.filter(p => {
+    if (!p) return false;
     if (!cleanQuery) return true;
     return (
-      p.caption.toLowerCase().includes(cleanQuery) ||
-      p.hashtags.some(tag => tag.toLowerCase().includes(cleanQuery)) ||
-      p.authorName.toLowerCase().includes(cleanQuery) ||
-      p.authorUsername.toLowerCase().includes(cleanQuery)
+      (p.caption || '').toLowerCase().includes(cleanQuery) ||
+      (Array.isArray(p.hashtags) && p.hashtags.some(tag => tag && tag.toLowerCase().includes(cleanQuery))) ||
+      (p.authorName || '').toLowerCase().includes(cleanQuery) ||
+      (p.authorUsername || '').toLowerCase().includes(cleanQuery)
     );
   });
 

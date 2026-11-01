@@ -58,7 +58,20 @@ export async function idbGet<T = any>(key: string): Promise<T | null> {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
       const req = store.get(key);
-      req.onsuccess = () => resolve(req.result ?? null);
+      req.onsuccess = () => {
+        let val = req.result ?? null;
+        if (typeof val === 'string') {
+          const trimmed = val.trim();
+          if ((trimmed.startsWith('[') && trimmed.endsWith(']')) || (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+            try {
+              val = JSON.parse(trimmed);
+            } catch {
+              // keep as string
+            }
+          }
+        }
+        resolve(val);
+      };
       req.onerror = () => reject(req.error);
     });
   } catch (err) {

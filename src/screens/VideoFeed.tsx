@@ -26,7 +26,8 @@ export const VideoFeed: React.FC<VideoFeedProps> = ({ onSelectUser }) => {
   const { posts, toggleLikePost, toggleSavePost, followUser } = useData();
   const { currentUser } = useAuth();
 
-  const videoPosts = posts.filter(p => p.type === 'video');
+  const safePosts = Array.isArray(posts) ? posts : [];
+  const videoPosts = safePosts.filter(p => p && p.type === 'video');
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isMuted, setIsMuted] = useState(true);
